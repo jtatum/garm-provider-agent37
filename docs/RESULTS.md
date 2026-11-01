@@ -1,6 +1,6 @@
 # Live acceptance results
 
-Verified on **2026-11-01** against the real Agent37 API, the real GARM external-provider protocol, and Docker Gitea's synthetic private `lab-admin/runner-proof` repository. This is a working development implementation for trusted jobs, not a production host1 deployment.
+Verified on **2026-11-01** against the real Agent37 API, the real GARM external-provider protocol, and Docker Gitea's private `lab-admin/runner-proof` lab repository. This is a working development implementation for trusted jobs, not a production host1 deployment.
 
 ## Passed end to end
 
@@ -47,4 +47,6 @@ Provider race tests, bootstrap Python tests and Go vet passed via `make check`. 
 
 A subsequent [twenty-job burst at ten concurrent VMs](experiments/ten-concurrency.md) also passed, including restart recovery and automatic cleanup.
 
-Still unvalidated: real host1 workflows and image/cache selection; production endpoint routing, TLS and secrets; sustained high-concurrency workloads; account quota/funding exhaustion under live load; missed or reordered forge-event recovery; multiple controllers; untrusted-fork policy; production release/upgrade procedures. VM reuse, cooldown and spending enforcement are not implemented. Agent37 account automatic top-up settings were not changed. The configured VM cap is not a billing cap.
+A subsequent [37-check trusted workload](experiments/trusted-workload.md) passed all jobs using a cached Ubuntu job image. GARM requested one surplus idle worker, so the exact-allocation assertion remains failed; automatic cleanup and the cap of ten passed. Private source and raw logs are retained outside this repository.
+
+Still unvalidated: production workload behavior and BuildKit cache selection; production endpoint routing, TLS and secrets; sustained high-concurrency workloads; account quota/funding exhaustion under live load; missed or reordered forge-event recovery; multiple controllers; untrusted-fork policy; production release/upgrade procedures. VM reuse, cooldown and spending enforcement are not implemented. Agent37 account automatic top-up settings were not changed. The configured VM cap is not a billing cap.

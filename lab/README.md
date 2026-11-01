@@ -48,7 +48,28 @@ python3 lab/image.py build --name garm-gitea-runner
 python3 lab/image.py status
 ```
 
-`build` uploads only four allowlisted files, and does not pass the API key to the build. `status` saves the returned revision/digest privately. Inspect the successful revision and pin it in the pool; `lab/manage.py pool` currently selects `garm-gitea-runner@1`. Rebuilding creates a new revision, so deliberately update that pin. Ubuntu base, Docker components, and runner versions are pinned; other apt dependencies resolve at build time and are recorded in `/opt/garm/packages.txt`. A published template revision freezes the resulting image. Preloaded Docker job images do not populate a separate Buildx builder's cache.
+`build` uploads only five allowlisted files, and does not pass the API key to the build. `status` saves the returned revision/digest privately. Inspect the successful revision and pin it in the pool; `lab/manage.py pool` currently selects `garm-gitea-runner@1`. Rebuilding creates a new revision, so deliberately update that pin. Ubuntu base, Docker components, and runner versions are pinned; other apt dependencies resolve at build time and are recorded in `/opt/garm/packages.txt`. A published template revision freezes the resulting image. Preloaded Docker job images do not populate a separate Buildx builder's cache.
+
+## Cache a larger job image
+
+The build helper can add one digest-pinned Linux amd64 job image to the reusable VM image:
+
+```sh
+python3 lab/image.py build --name garm-gitea-ubuntu \
+  --job-image REGISTRY/IMAGE@sha256:DIGEST
+python3 lab/image.py status
+```
+
+This option requires local Docker Buildx to inspect the public registry manifest. The cloud builder fetches the image by its platform digest with Skopeo; the upload remains the same five-file allowlist. No repository source or credentials enter the reusable image. The build verifies the archive configuration against the registry configuration digest. At boot, Docker loads the archive and verifies its platform, filesystem layers, and runtime configuration before the readiness marker is written. This works with both classic and containerd image stores, whose image IDs differ. Large archives increase readiness time and disk usage; measure both before setting bootstrap deadlines.
+
+The private `image-build.json` record contains `cached_job_image.reference`, the local cache tag used by the runner. Select that tag and the published template revision explicitly:
+
+```sh
+python3 lab/manage.py pool --concurrency 2 \
+  --image garm-gitea-ubuntu@REVISION --job-image garm-template-cache/job:CONFIG_PREFIX
+```
+
+A local cache tag is verified against the pinned source configuration on each boot. It avoids a new registry pull for the job container; it does not prewarm Buildx caches or dependencies downloaded by a workflow.
 
 ## Run the proof
 
@@ -77,3 +98,18 @@ python3 lab/manage.py stop
 ```
 
 Stopping GARM is not cloud cleanup. If a test was interrupted before its `finally` cleanup, disable the pool and run `python3 -c 'import sys; sys.path.insert(0,"lab"); import integration; integration.cleanup()'`, then verify status. Inspect any cleanup error; do not assume a timeout means an instance was deleted. Leave Docker volumes intact. The controller normally stays running between tests; stop it when finished.
+
+## Measure reviewed workload jobs
+
+For an already installed, reviewed dispatch workflow in the private lab repository, the workload harness records job status and timings, owned VM counts, guest CPU/memory/disk samples, image readiness, wallet observations, and private job logs:
+
+```sh
+python3 lab/workload_run.py --workflow reviewed-workload.yaml \
+  --concurrency 2 --jobs 3 --record workload-smoke --timeout 1200
+```
+
+Match both pool/provider caps to `--concurrency` first. The harness checks available account slots and starts from a disabled zero-idle pool with no workers. It requires the declared number of jobs to finish and the pool to scale to zero, then disables the pool and revokes its temporary SSH key. Failed jobs or a mismatch between expected jobs, distinct runners and observed VMs produce a failed result even when cleanup succeeds. On interruption it cancels the run and invokes scoped cleanup. Check the saved cleanup result and GARM records before another attempt.
+
+This command executes the installed workflow; it does not rewrite or audit it. Use a private source snapshot and explicit dispatch triggers. Review agent calls, live operational actions, publication steps, and production credential requirements before importing an existing workflow into the lab. Keep source snapshots and raw logs in ignored private state. The public provider repository contains no private workload source.
+
+Guest samples are periodic observations, so short-lived peaks may be missed. Cached job-image startup, action downloads, dependency downloads, and Buildx work are separate costs. Keep workload execution and queue/startup measurements separate when comparing runs.

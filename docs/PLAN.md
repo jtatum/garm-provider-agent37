@@ -34,7 +34,9 @@ A later [twenty-job, ten-VM acceptance run](experiments/ten-concurrency.md) pass
 
 ## Follow-on work
 
-- Select a representative host1 workflow and prepare its actual job images and BuildKit cache; measure queue-to-start and execution separately.
+- Completed: [37 selected trusted checks](experiments/trusted-workload.md), including application builds and artifact transfer, with a pinned cached Ubuntu job image.
+- Reproduce the surplus idle allocation in GARM and assess its queued-job lock/replacement logic before a wider rollout. The strict one-allocation-per-job check remains failed.
+- Measure BuildKit cache choices and compare representative execution and queue/startup time against the existing Kubernetes runners.
 - Establish production Gitea/GARM network routing and scoped credentials, then pilot one trusted repository at a small cap.
 - Publish release binaries after the real-workload pilot; track the [GARM completion fix](https://github.com/cloudbase/garm/pull/939) upstream.
 - Expand failure/reconciliation testing for missed or reordered webhooks, longer jobs and live capacity refusals before a wider rollout.

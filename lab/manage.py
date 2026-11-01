@@ -198,7 +198,7 @@ def setup():
     print(json.dumps({'controller_id': controller.get('controller_id'), 'repository_id': repo['id']}))
 
 
-def pool(concurrency=2):
+def pool(concurrency=2, image='garm-gitea-runner@1', job_image='alpine:3.22'):
     template_path = REPO / 'templates/gitea-agent37.py.tmpl'
     templates = garm('GET', '/templates') or []
     body = {'name': 'agent37-gitea', 'description': 'Fresh Agent37 VM Gitea runner',
@@ -214,10 +214,10 @@ def pool(concurrency=2):
     pools = garm('GET', '/repositories/' + rid + '/pools') or []
     existing = next((p for p in pools if p['provider_name'] == 'agent37-lab'), None)
     spec = {'provider_name': 'agent37-lab', 'max_runners': concurrency, 'min_idle_runners': 0,
-            'image': 'garm-gitea-runner@1', 'flavor': 'default', 'os_type': 'linux',
+            'image': image, 'flavor': 'default', 'os_type': 'linux',
             'os_arch': 'amd64', 'tags': ['garm-agent37'], 'enabled': False,
             'runner_prefix': 'a37lab', 'runner_bootstrap_timeout': 5, 'template_id': t['id'],
-            'extra_specs': {'extra_context': {'agent37_container_network': 'host', 'agent37_default_image': 'alpine:3.22'}}}
+            'extra_specs': {'extra_context': {'agent37_container_network': 'host', 'agent37_default_image': job_image}}}
     p = garm('PUT', '/pools/' + existing['id'], spec) if existing else garm('POST', '/repositories/' + rid + '/pools', spec)
     save('pool.json', p)
     print(json.dumps({'pool_id': p['id'], 'enabled': p.get('enabled', False)}))
@@ -244,13 +244,15 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser()
     p.add_argument('operation', choices=['configure','start','stop','restart','setup','pool','key','status'])
     p.add_argument('--key-file')
+    p.add_argument('--image',default='garm-gitea-runner@1')
+    p.add_argument('--job-image',default='alpine:3.22')
     p.add_argument('--concurrency',type=int,choices=range(1,11),default=2)
     p.add_argument('--gitea-credentials', default=str(REPO.parent / 'garm-provider-boat/lab/.state/credentials.json'))
     args = p.parse_args()
     if args.operation == 'configure':
         configure(args)
     elif args.operation == 'pool':
-        pool(args.concurrency)
+        pool(args.concurrency,args.image,args.job_image)
     elif args.operation == 'restart':
         stop(); start()
     else:

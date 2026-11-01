@@ -6,6 +6,8 @@ import subprocess
 import sys
 import time
 
+from image_cache import verify_loaded
+
 started = time.monotonic()
 started_at = time.time()
 home = Path(os.environ['HOME'])
@@ -41,11 +43,20 @@ try:
     assert info['RootFS']['Layers'] == ['sha256:be64570a34e4c5e361d1f5d9cb42b851e7f9a33a61f91c335b287c1c7868f921']
     subprocess.run(['docker', 'tag', image, 'alpine:3.22'], check=True)
     subprocess.run(['docker', 'run', '--rm', '--pull=never', '--network=none', 'alpine:3.22', 'true'], check=True, timeout=30)
+    job_image = os.environ.get('GARM_CACHED_JOB_IMAGE')
+    cache_started = time.monotonic()
+    if job_image:
+        subprocess.run(['docker', 'load', '-i', '/opt/garm/cache/job.tar'], check=True, timeout=180)
+        job_info = json.loads(subprocess.check_output(['docker', 'image', 'inspect', job_image], text=True))[0]
+        expected = json.loads(Path('/opt/garm/cache/job-config.json').read_text())
+        verify_loaded(job_info, expected)
+        subprocess.run(['docker', 'run', '--rm', '--pull=never', '--network=none', job_image, 'true'], check=True, timeout=30)
     subprocess.run(['gitea-runner', '--version'], check=True)
     ready.write_text(json.dumps({'entrypoint_started_at': started_at, 'ready_at': time.time(),
                                 'docker_ready_seconds': docker_ready - started,
                                 'total_bootstrap_seconds': time.monotonic() - started,
-                                'filesystem': fs, 'cached_image': image}))
+                                'filesystem': fs, 'cached_image': image, 'cached_job_image': job_image,
+                                'job_image_load_seconds': time.monotonic() - cache_started}))
     sys.exit(docker.wait())
 finally:
     ready.unlink(missing_ok=True)

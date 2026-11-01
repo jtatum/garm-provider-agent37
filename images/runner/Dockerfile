@@ -25,6 +25,7 @@ RUN curl -fsSL https://gitea.com/gitea/runner/releases/download/v3.5.0/gitea-run
 
 COPY alpine.tar /opt/garm/cache/alpine.tar
 RUN echo '3c1b545ef346526439a40ab87bf252f21c0e5591e3d181d63bd0a6436a745bb3  /opt/garm/cache/alpine.tar' | sha256sum -c -
+COPY image_cache.py /opt/garm/image_cache.py
 COPY entrypoint.py /opt/garm/entrypoint.py
 WORKDIR /root
 ENTRYPOINT ["/usr/bin/tini", "--", "python3", "/opt/garm/entrypoint.py"]

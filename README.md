@@ -2,7 +2,7 @@
 
 A GARM external provider for fresh Agent37 VM runners running Gitea Actions. GARM handles job demand and runner reconciliation; this provider creates a VM from a pinned workspace template, waits for Docker and the cached job image, launches GARM's runner installation script, and deletes the VM when GARM retires it. Each worker registers an ephemeral runner with capacity one and runs `daemon --once`.
 
-**Experimental: Gitea runners for trusted repositories.** GitHub runners are not implemented yet. A [20-job burst at ten concurrent VMs](docs/experiments/ten-concurrency.md) passed, including controller restart recovery and automatic scale-to-zero. Real application builds and production deployment remain unvalidated. See [the project/test plan](docs/PLAN.md), [integration results](docs/RESULTS.md), and [operations](docs/OPERATIONS.md) for the tested scope and setup details.
+**Experimental: Gitea runners for trusted repositories.** GitHub runners are not implemented yet. A [20-job burst at ten concurrent VMs](docs/experiments/ten-concurrency.md) passed, including controller restart recovery and automatic scale-to-zero. A [37-check application workload](docs/experiments/trusted-workload.md) also passed all jobs and cleaned up automatically; its strict allocation check found one extra idle VM. Production deployment remains unvalidated. See [the project/test plan](docs/PLAN.md), [integration results](docs/RESULTS.md), and [operations](docs/OPERATIONS.md) for the tested scope and setup details.
 
 ## Compatibility
 
@@ -13,7 +13,7 @@ A GARM external provider for fresh Agent37 VM runners running Gitea Actions. GAR
 
 ## Build and check
 
-Use Go 1.25 or newer and Python 3 for the bootstrap tests. Building the pinned GARM baseline separately requires its own Go 1.26.2 minimum.
+Use Go 1.25 or newer and Python 3.11+ for the lab and bootstrap tests. Building the pinned GARM baseline separately requires its own Go 1.26.2 minimum.
 
 ```sh
 make help
@@ -21,7 +21,7 @@ make build
 make check
 ```
 
-The binary is `bin/garm-provider-agent37`. `make check` runs race-enabled Go tests, the Python bootstrap contract tests through Go, and `go vet`. Python-dependent tests are skipped if Python 3 is unavailable; install it to run the complete checks. GitHub Actions runs these checks and builds on Linux and macOS, checks Go formatting and Python syntax, and verifies a static Linux amd64 build. CI uses mock APIs and does not create cloud VMs or require credentials. There is no installer, release binary, or published container image in this repository.
+The binary is `bin/garm-provider-agent37`. `make check` runs race-enabled Go tests, the Python bootstrap contract tests through Go, the lab helper tests, and `go vet`. GitHub Actions runs these checks and builds on Linux and macOS, checks Go formatting and Python syntax, and verifies a static Linux amd64 build. CI uses mock APIs and does not create cloud VMs or require credentials. There is no installer, release binary, or published container image in this repository.
 
 ## Image contract
 

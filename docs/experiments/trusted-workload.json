@@ -1,0 +1,796 @@
+{
+  "date": "2026-11-01",
+  "jobs": 37,
+  "successful_jobs": 37,
+  "distinct_runners": 37,
+  "vms_created": 38,
+  "concurrency_cap": 10,
+  "peak_observed_vms": 10,
+  "peak_observed_running_jobs": 7,
+  "scale_zero_seconds": 248.982,
+  "last_job_completed_seconds": 244.447,
+  "observed_wallet_delta_usd": 0.02444,
+  "strict_acceptance_passed": false,
+  "allocation_finding": "Expected one distinct runner and observed VM per successful job",
+  "resource_sample_count": 243,
+  "sampled_vms": 38,
+  "maximum_sampled_memory_used_gib": 1.789,
+  "maximum_sampled_disk_used_gib": 13.136,
+  "median_job_image_load_seconds": 15.353,
+  "median_image_bootstrap_seconds": 16.117,
+  "vm": {
+    "vcpus": 4,
+    "memory_gb": 8,
+    "disk_gb": 20,
+    "region": "us"
+  },
+  "template_digest": "sha256:56a4103a71ff42be66bcbce26cd9f0046f86a0a331dee40930ea32c8060bd502",
+  "job_image": "docker.gitea.com/runner-images:ubuntu-latest@sha256:0e62e56b382ebf485bff1e51a05cbe27c708545a2e91425467fd31eb3e249521",
+  "cleanup": {
+    "cloud_instances": 0,
+    "temporary_ssh_keys": 0,
+    "gitea_runners": 0,
+    "garm_instances": 0,
+    "controller_stopped": true,
+    "pool_enabled": false,
+    "restored_cap": 2
+  },
+  "observations": [
+    {
+      "seconds": 0.605,
+      "vms": 0,
+      "running": 0,
+      "queued": 36,
+      "completed": 0
+    },
+    {
+      "seconds": 2.86,
+      "vms": 7,
+      "running": 0,
+      "queued": 36,
+      "completed": 0
+    },
+    {
+      "seconds": 5.144,
+      "vms": 10,
+      "running": 0,
+      "queued": 36,
+      "completed": 0
+    },
+    {
+      "seconds": 7.454,
+      "vms": 10,
+      "running": 0,
+      "queued": 36,
+      "completed": 0
+    },
+    {
+      "seconds": 9.753,
+      "vms": 10,
+      "running": 0,
+      "queued": 36,
+      "completed": 0
+    },
+    {
+      "seconds": 12.016,
+      "vms": 10,
+      "running": 0,
+      "queued": 36,
+      "completed": 0
+    },
+    {
+      "seconds": 14.389,
+      "vms": 10,
+      "running": 0,
+      "queued": 36,
+      "completed": 0
+    },
+    {
+      "seconds": 16.631,
+      "vms": 10,
+      "running": 0,
+      "queued": 36,
+      "completed": 0
+    },
+    {
+      "seconds": 18.924,
+      "vms": 10,
+      "running": 0,
+      "queued": 36,
+      "completed": 0
+    },
+    {
+      "seconds": 21.201,
+      "vms": 10,
+      "running": 0,
+      "queued": 36,
+      "completed": 0
+    },
+    {
+      "seconds": 23.613,
+      "vms": 10,
+      "running": 2,
+      "queued": 34,
+      "completed": 0
+    },
+    {
+      "seconds": 25.845,
+      "vms": 10,
+      "running": 6,
+      "queued": 29,
+      "completed": 1
+    },
+    {
+      "seconds": 28.111,
+      "vms": 10,
+      "running": 5,
+      "queued": 28,
+      "completed": 3
+    },
+    {
+      "seconds": 30.445,
+      "vms": 9,
+      "running": 7,
+      "queued": 26,
+      "completed": 3
+    },
+    {
+      "seconds": 32.703,
+      "vms": 10,
+      "running": 7,
+      "queued": 26,
+      "completed": 3
+    },
+    {
+      "seconds": 34.997,
+      "vms": 8,
+      "running": 5,
+      "queued": 26,
+      "completed": 5
+    },
+    {
+      "seconds": 37.286,
+      "vms": 8,
+      "running": 4,
+      "queued": 26,
+      "completed": 6
+    },
+    {
+      "seconds": 39.562,
+      "vms": 7,
+      "running": 4,
+      "queued": 26,
+      "completed": 6
+    },
+    {
+      "seconds": 41.875,
+      "vms": 7,
+      "running": 4,
+      "queued": 26,
+      "completed": 6
+    },
+    {
+      "seconds": 44.143,
+      "vms": 10,
+      "running": 3,
+      "queued": 26,
+      "completed": 7
+    },
+    {
+      "seconds": 46.397,
+      "vms": 10,
+      "running": 3,
+      "queued": 26,
+      "completed": 7
+    },
+    {
+      "seconds": 48.682,
+      "vms": 10,
+      "running": 3,
+      "queued": 26,
+      "completed": 7
+    },
+    {
+      "seconds": 50.955,
+      "vms": 9,
+      "running": 4,
+      "queued": 25,
+      "completed": 7
+    },
+    {
+      "seconds": 53.215,
+      "vms": 10,
+      "running": 3,
+      "queued": 26,
+      "completed": 8
+    },
+    {
+      "seconds": 55.483,
+      "vms": 10,
+      "running": 2,
+      "queued": 26,
+      "completed": 9
+    },
+    {
+      "seconds": 57.738,
+      "vms": 10,
+      "running": 4,
+      "queued": 24,
+      "completed": 9
+    },
+    {
+      "seconds": 59.984,
+      "vms": 8,
+      "running": 3,
+      "queued": 24,
+      "completed": 10
+    },
+    {
+      "seconds": 62.233,
+      "vms": 8,
+      "running": 4,
+      "queued": 23,
+      "completed": 10
+    },
+    {
+      "seconds": 64.504,
+      "vms": 9,
+      "running": 4,
+      "queued": 23,
+      "completed": 10
+    },
+    {
+      "seconds": 66.754,
+      "vms": 9,
+      "running": 6,
+      "queued": 21,
+      "completed": 10
+    },
+    {
+      "seconds": 69.017,
+      "vms": 10,
+      "running": 5,
+      "queued": 21,
+      "completed": 11
+    },
+    {
+      "seconds": 71.264,
+      "vms": 10,
+      "running": 4,
+      "queued": 21,
+      "completed": 12
+    },
+    {
+      "seconds": 73.532,
+      "vms": 9,
+      "running": 4,
+      "queued": 21,
+      "completed": 12
+    },
+    {
+      "seconds": 75.802,
+      "vms": 8,
+      "running": 4,
+      "queued": 20,
+      "completed": 13
+    },
+    {
+      "seconds": 78.082,
+      "vms": 10,
+      "running": 3,
+      "queued": 20,
+      "completed": 14
+    },
+    {
+      "seconds": 80.355,
+      "vms": 9,
+      "running": 4,
+      "queued": 19,
+      "completed": 14
+    },
+    {
+      "seconds": 82.601,
+      "vms": 10,
+      "running": 4,
+      "queued": 18,
+      "completed": 15
+    },
+    {
+      "seconds": 84.883,
+      "vms": 8,
+      "running": 4,
+      "queued": 17,
+      "completed": 16
+    },
+    {
+      "seconds": 89.221,
+      "vms": 8,
+      "running": 4,
+      "queued": 17,
+      "completed": 16
+    },
+    {
+      "seconds": 91.496,
+      "vms": 9,
+      "running": 2,
+      "queued": 17,
+      "completed": 18
+    },
+    {
+      "seconds": 93.769,
+      "vms": 8,
+      "running": 3,
+      "queued": 16,
+      "completed": 18
+    },
+    {
+      "seconds": 96.03,
+      "vms": 8,
+      "running": 3,
+      "queued": 16,
+      "completed": 18
+    },
+    {
+      "seconds": 98.31,
+      "vms": 10,
+      "running": 2,
+      "queued": 16,
+      "completed": 19
+    },
+    {
+      "seconds": 100.573,
+      "vms": 9,
+      "running": 1,
+      "queued": 16,
+      "completed": 20
+    },
+    {
+      "seconds": 102.846,
+      "vms": 10,
+      "running": 1,
+      "queued": 16,
+      "completed": 20
+    },
+    {
+      "seconds": 105.127,
+      "vms": 9,
+      "running": 2,
+      "queued": 15,
+      "completed": 20
+    },
+    {
+      "seconds": 107.383,
+      "vms": 9,
+      "running": 4,
+      "queued": 13,
+      "completed": 20
+    },
+    {
+      "seconds": 109.625,
+      "vms": 10,
+      "running": 2,
+      "queued": 13,
+      "completed": 22
+    },
+    {
+      "seconds": 112.049,
+      "vms": 10,
+      "running": 2,
+      "queued": 13,
+      "completed": 22
+    },
+    {
+      "seconds": 114.393,
+      "vms": 8,
+      "running": 4,
+      "queued": 11,
+      "completed": 22
+    },
+    {
+      "seconds": 116.718,
+      "vms": 8,
+      "running": 3,
+      "queued": 11,
+      "completed": 23
+    },
+    {
+      "seconds": 119.093,
+      "vms": 9,
+      "running": 3,
+      "queued": 11,
+      "completed": 23
+    },
+    {
+      "seconds": 121.391,
+      "vms": 9,
+      "running": 3,
+      "queued": 11,
+      "completed": 23
+    },
+    {
+      "seconds": 123.714,
+      "vms": 10,
+      "running": 3,
+      "queued": 11,
+      "completed": 23
+    },
+    {
+      "seconds": 126.126,
+      "vms": 10,
+      "running": 3,
+      "queued": 10,
+      "completed": 24
+    },
+    {
+      "seconds": 128.441,
+      "vms": 10,
+      "running": 3,
+      "queued": 10,
+      "completed": 24
+    },
+    {
+      "seconds": 130.769,
+      "vms": 9,
+      "running": 4,
+      "queued": 9,
+      "completed": 24
+    },
+    {
+      "seconds": 133.084,
+      "vms": 10,
+      "running": 4,
+      "queued": 9,
+      "completed": 24
+    },
+    {
+      "seconds": 135.377,
+      "vms": 10,
+      "running": 5,
+      "queued": 7,
+      "completed": 25
+    },
+    {
+      "seconds": 137.685,
+      "vms": 9,
+      "running": 5,
+      "queued": 5,
+      "completed": 27
+    },
+    {
+      "seconds": 139.99,
+      "vms": 8,
+      "running": 3,
+      "queued": 5,
+      "completed": 29
+    },
+    {
+      "seconds": 142.283,
+      "vms": 7,
+      "running": 4,
+      "queued": 4,
+      "completed": 29
+    },
+    {
+      "seconds": 144.57,
+      "vms": 8,
+      "running": 4,
+      "queued": 4,
+      "completed": 29
+    },
+    {
+      "seconds": 146.86,
+      "vms": 8,
+      "running": 4,
+      "queued": 4,
+      "completed": 29
+    },
+    {
+      "seconds": 149.16,
+      "vms": 8,
+      "running": 5,
+      "queued": 3,
+      "completed": 29
+    },
+    {
+      "seconds": 151.529,
+      "vms": 8,
+      "running": 4,
+      "queued": 3,
+      "completed": 30
+    },
+    {
+      "seconds": 153.816,
+      "vms": 8,
+      "running": 2,
+      "queued": 3,
+      "completed": 32
+    },
+    {
+      "seconds": 156.195,
+      "vms": 7,
+      "running": 2,
+      "queued": 3,
+      "completed": 32
+    },
+    {
+      "seconds": 158.469,
+      "vms": 7,
+      "running": 2,
+      "queued": 3,
+      "completed": 32
+    },
+    {
+      "seconds": 160.746,
+      "vms": 6,
+      "running": 4,
+      "queued": 1,
+      "completed": 32
+    },
+    {
+      "seconds": 163.022,
+      "vms": 6,
+      "running": 5,
+      "queued": 0,
+      "completed": 32
+    },
+    {
+      "seconds": 165.318,
+      "vms": 6,
+      "running": 4,
+      "queued": 0,
+      "completed": 33
+    },
+    {
+      "seconds": 167.58,
+      "vms": 6,
+      "running": 3,
+      "queued": 0,
+      "completed": 34
+    },
+    {
+      "seconds": 169.862,
+      "vms": 4,
+      "running": 2,
+      "queued": 0,
+      "completed": 35
+    },
+    {
+      "seconds": 172.217,
+      "vms": 4,
+      "running": 2,
+      "queued": 0,
+      "completed": 35
+    },
+    {
+      "seconds": 174.486,
+      "vms": 3,
+      "running": 2,
+      "queued": 0,
+      "completed": 35
+    },
+    {
+      "seconds": 176.807,
+      "vms": 3,
+      "running": 2,
+      "queued": 0,
+      "completed": 35
+    },
+    {
+      "seconds": 179.141,
+      "vms": 2,
+      "running": 2,
+      "queued": 0,
+      "completed": 35
+    },
+    {
+      "seconds": 181.455,
+      "vms": 2,
+      "running": 2,
+      "queued": 0,
+      "completed": 35
+    },
+    {
+      "seconds": 183.76,
+      "vms": 2,
+      "running": 2,
+      "queued": 0,
+      "completed": 35
+    },
+    {
+      "seconds": 186.039,
+      "vms": 2,
+      "running": 2,
+      "queued": 0,
+      "completed": 35
+    },
+    {
+      "seconds": 188.303,
+      "vms": 2,
+      "running": 2,
+      "queued": 0,
+      "completed": 35
+    },
+    {
+      "seconds": 190.598,
+      "vms": 2,
+      "running": 2,
+      "queued": 0,
+      "completed": 35
+    },
+    {
+      "seconds": 192.87,
+      "vms": 2,
+      "running": 2,
+      "queued": 0,
+      "completed": 35
+    },
+    {
+      "seconds": 195.239,
+      "vms": 2,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 197.522,
+      "vms": 2,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 199.799,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 202.094,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 204.402,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 206.936,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 209.232,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 211.662,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 214.035,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 216.348,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 218.655,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 220.969,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 223.261,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 225.597,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 227.942,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 230.277,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 232.682,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 235.015,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 237.326,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 239.66,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 241.987,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 244.328,
+      "vms": 1,
+      "running": 1,
+      "queued": 0,
+      "completed": 36
+    },
+    {
+      "seconds": 246.655,
+      "vms": 1,
+      "running": 0,
+      "queued": 0,
+      "completed": 37
+    },
+    {
+      "seconds": 248.953,
+      "vms": 0,
+      "running": 0,
+      "queued": 0,
+      "completed": 37
+    }
+  ]
+}

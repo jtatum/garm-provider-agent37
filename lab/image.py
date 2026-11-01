@@ -1,7 +1,9 @@
 import argparse
 import hashlib
+import io
 import json
 import re
+import subprocess
 import tarfile
 import time
 import urllib.request
@@ -14,22 +16,63 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def build(name):
+def resolve_job_image(reference):
+    if not re.fullmatch(r'[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}', reference):
+        raise ValueError('Job image must be pinned by registry digest')
+    def inspect(value):
+        return json.loads(subprocess.check_output(['docker', 'buildx', 'imagetools', 'inspect', value, '--raw'], text=True))
+    repository, digest = reference.split('@')
+    prefix, separator, leaf = repository.rpartition('/')
+    repository = prefix + separator + leaf.split(':')[0]
+    reference = repository + '@' + digest
+    manifest = inspect(reference)
+    if 'manifests' in manifest:
+        matches = [item for item in manifest['manifests'] if item.get('platform', {}).get('architecture') == 'amd64' and item.get('platform', {}).get('os') == 'linux']
+        if len(matches) != 1:
+            raise ValueError('Expected exactly one Linux amd64 manifest')
+        if not re.fullmatch(r'sha256:[a-f0-9]{64}', matches[0]['digest']):
+            raise ValueError('Invalid platform manifest digest')
+        reference = repository + '@' + matches[0]['digest']
+        manifest = inspect(reference)
+    digest = manifest['config']['digest']
+    if not re.fullmatch(r'sha256:[a-f0-9]{64}', digest):
+        raise ValueError('Invalid image configuration digest')
+    return reference, digest, 'garm-template-cache/job:' + digest.split(':')[1][:16]
+
+
+def build(name, job_image=None):
     if not re.fullmatch(r'[a-z][a-z0-9-]{2,62}', name):
         raise RuntimeError('Use a lowercase workspace template name')
     context = m.REPO / 'images/runner'
-    names = ['Dockerfile', 'entrypoint.py', 'alpine.tar', '.dockerignore']
+    names = ['Dockerfile', 'entrypoint.py', 'image_cache.py', 'alpine.tar', '.dockerignore']
     if any(not (context / n).is_file() or (context / n).is_symlink() for n in names):
-        raise RuntimeError('Prepare the four regular image context files first')
-    manifest = {n:hashlib.sha256((context/n).read_bytes()).hexdigest() for n in names}
+        raise RuntimeError('Prepare the five regular image context files first')
+    files = {n:(context/n).read_bytes() for n in names}
+    cached = None
+    if job_image:
+        source, digest, reference = resolve_job_image(job_image)
+        cached = {'source': job_image, 'platform_source': source, 'config_digest': digest, 'reference': reference}
+        extra = f'''\nRUN apt-get update && apt-get install -y --no-install-recommends skopeo \\
+    && skopeo copy --override-os linux --override-arch amd64 docker://{source} docker-archive:/opt/garm/cache/job.tar:{reference} \\
+    && python3 /opt/garm/image_cache.py /opt/garm/cache/job.tar {digest} > /opt/garm/cache/job-config.json \\
+    && dpkg-query -W > /opt/garm/packages.txt \\
+    && rm -rf /var/lib/apt/lists/*
+ENV GARM_CACHED_JOB_IMAGE={reference}
+'''
+        files['Dockerfile'] += extra.encode()
+    manifest = {n:hashlib.sha256(data).hexdigest() for n,data in files.items()}
     archive = m.STATE / 'image-context.tgz'
     with tarfile.open(archive, 'w:gz') as tar:
-        for n in names:tar.add(context/n, arcname=n, recursive=False)
+        for n,data in files.items():
+            info = tarfile.TarInfo(n)
+            info.size = len(data)
+            info.mode = 0o644
+            tar.addfile(info, io.BytesIO(data))
     archive.chmod(0o600)
     size = archive.stat().st_size
     result = m.cloud('POST','/template-builds',{'name':name,'size_bytes':size})
     m.save('image-build.json',{'id':result['id'],'name':name,'started_at':time.time(),
-                              'context_bytes':size,'files_sha256':manifest})
+                              'context_bytes':size,'files_sha256':manifest,'cached_job_image':cached})
     if not result['upload_url'].startswith('https://'):
         raise RuntimeError('Build service returned a non-HTTPS upload URL')
     req = urllib.request.Request(result['upload_url'],data=archive.read_bytes(),method='PUT',
@@ -58,6 +101,7 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('operation',choices=['build','status'])
     parser.add_argument('--name',default='garm-gitea-runner')
+    parser.add_argument('--job-image')
     args=parser.parse_args()
-    if args.operation=='build':build(args.name)
+    if args.operation=='build':build(args.name,args.job_image)
     else:status()

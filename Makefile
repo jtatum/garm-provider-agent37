@@ -9,6 +9,7 @@ tidy:
 	go mod tidy
 test:
 	go test -race ./...
+	python3 -m unittest discover -s lab -p 'test_*.py'
 lint-go:
 	go vet ./...
 check: test lint-go
