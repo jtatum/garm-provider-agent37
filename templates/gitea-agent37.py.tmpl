@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+import fcntl
+import json
+import os
+from pathlib import Path
+import signal
+import ssl
+import subprocess
+import sys
+import time
+import urllib.request
+
+ROOT = Path('/root/garm')
+RUNNER = '/usr/local/bin/gitea-runner'
+CONFIG = {
+    'metadata_url': {{ printf "%q" .MetadataURL }},
+    'callback_url': {{ printf "%q" .CallbackURL }},
+    'token': {{ printf "%q" .CallbackToken }},
+    'repo_url': {{ printf "%q" .RepoURL }},
+    'name': {{ printf "%q" .RunnerName }},
+    'labels': {{ printf "%q" .RunnerLabels }},
+    'image': {{ printf "%q" (index .ExtraContext "agent37_default_image") }} or 'alpine:3.22',
+    'network': {{ printf "%q" (index .ExtraContext "agent37_container_network") }},
+}
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise RuntimeError('redirect refused')
+
+
+def write_private(path, value):
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 'w') as stream:
+        stream.write(value)
+
+
+def request(url, data=None):
+    headers = {'Authorization': 'Bearer ' + CONFIG['token'], 'Accept': 'application/json'}
+    if data is not None:
+        headers['Content-Type'] = 'application/json'
+    req = urllib.request.Request(url, headers=headers, data=json.dumps(data).encode() if data is not None else None)
+    opener = urllib.request.build_opener(NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+    with opener.open(req, timeout=10) as response:
+        body = response.read(1024 * 1024 + 1)
+        if len(body) > 1024 * 1024:
+            raise RuntimeError('response too large')
+        return body
+
+
+def callback(status, message, agent_id=None):
+    value = {'status': status, 'message': message}
+    if agent_id is not None:
+        value['agent_id'] = agent_id
+    url = CONFIG['callback_url'].rstrip('/')
+    if not url.endswith('/status'):
+        url += '/status'
+    request(url, value)
+
+
+def main():
+    os.umask(0o077)
+    Path(__file__).unlink(missing_ok=True)
+    ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd = os.open(ROOT / 'runner.lock', os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        claim = ROOT / 'runner.claim'
+        claim_fd = os.open(claim, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(claim_fd)
+    except Exception:
+        os.close(fd)
+        raise
+    token_file = ROOT / 'registration-token'
+    idle = False
+    child = None
+    try:
+{{- if .AgentMode }}
+        raise RuntimeError('GARM agent mode is unsupported by this template')
+{{- end }}
+{{- if .UseJITConfig }}
+        raise RuntimeError('JIT is unsupported by this template')
+{{- end }}
+        assert not (ROOT / '.runner').exists(), 'runner identity already exists'
+        subprocess.run(['docker', 'info'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+        labels = [label if ':' in label else label + ':docker://' + CONFIG['image'] for label in CONFIG['labels'].split(',') if label]
+        if not labels:
+            raise RuntimeError('runner labels are required')
+        config = {
+            'log': {'level': 'info'},
+            'runner': {'file': str(ROOT / '.runner'), 'capacity': 1, 'timeout': '1h',
+                       'shutdown_timeout': '30s', 'fetch_interval': '1s', 'fetch_interval_max': '1s',
+                       'tool_cache_mode': 'none', 'default_image': CONFIG['image'], 'labels': labels},
+            'cache': {'enabled': False},
+            'container': {'network': CONFIG['network'], 'privileged': False, 'require_docker': True,
+                          'docker_timeout': '30s', 'docker_host': 'unix:///var/run/docker.sock', 'valid_volumes': []},
+            'host': {'workdir_parent': str(ROOT / 'work')},
+        }
+        write_private(ROOT / 'runner.yaml', json.dumps(config))
+        callback('installing', 'registering ephemeral Gitea runner')
+        token = request(CONFIG['metadata_url'].rstrip('/') + '/runner-registration-token/').decode().strip()
+        if not token or '\n' in token:
+            raise RuntimeError('invalid registration token')
+        write_private(token_file, token)
+        del token
+        try:
+            subprocess.run([RUNNER, '-c', str(ROOT / 'runner.yaml'), 'register', '--ephemeral', '--no-interactive',
+                            '--instance', CONFIG['repo_url'], '--token-file', str(token_file),
+                            '--name', CONFIG['name'], '--labels', ','.join(labels)],
+                           cwd=ROOT, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+        finally:
+            token_file.unlink(missing_ok=True)
+        identity = json.loads((ROOT / '.runner').read_text())
+        if identity.get('ephemeral') is not True or not isinstance(identity.get('id'), int):
+            raise RuntimeError('expected ephemeral runner identity')
+        os.chmod(ROOT / '.runner', 0o600)
+        base = CONFIG['callback_url'].rstrip('/')
+        if base.endswith('/status'):
+            base = base[:-len('/status')]
+        request(base + '/system-info/', {'os_name': 'linux', 'os_version': '', 'agent_id': identity['id']})
+        callback('idle', 'ephemeral runner ready', identity['id'])
+        idle = True
+        CONFIG.pop('token', None)
+        write_private(ROOT / 'runner.started', json.dumps({'id': identity['id'], 'started_at': time.time()}))
+        env = {k: v for k, v in os.environ.items() if k in ('PATH', 'HOME', 'LANG', 'SSL_CERT_FILE', 'http_proxy', 'https_proxy', 'no_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY')}
+        with open(ROOT / 'runner.log', 'ab', buffering=0) as log:
+            child = subprocess.Popen([RUNNER, '-c', str(ROOT / 'runner.yaml'), 'daemon', '--once'],
+                                     cwd=ROOT, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                                     env=env, start_new_session=True)
+            def stop(signum, frame):
+                raise InterruptedError('worker interrupted')
+            signal.signal(signal.SIGTERM, stop)
+            signal.signal(signal.SIGINT, stop)
+            code = child.wait()
+        write_private(ROOT / 'runner.finished', json.dumps({'exit_code': code, 'finished_at': time.time()}))
+        if code:
+            write_private(ROOT / 'runner.failed', 'one-job runner exited unsuccessfully\n')
+    except Exception:
+        if child is not None and child.poll() is None:
+            os.killpg(child.pid, signal.SIGTERM)
+            try:
+                child.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                os.killpg(child.pid, signal.SIGKILL)
+                child.wait()
+        write_private(ROOT / 'runner.failed', 'worker cannot be reused\n')
+        if not idle:
+            try:
+                callback('failed', 'runner setup failed; replace this worker')
+            except Exception:
+                pass
+            raise SystemExit(1)
+    finally:
+        CONFIG.pop('token', None)
+        token_file.unlink(missing_ok=True)
+        os.close(fd)
+
+
+if __name__ == '__main__':
+    main()

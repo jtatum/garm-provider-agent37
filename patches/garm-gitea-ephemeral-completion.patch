@@ -1,0 +1,141 @@
+diff --git a/runner/pool/pool.go b/runner/pool/pool.go
+index 507e050b..c7ab4c28 100644
+--- a/runner/pool/pool.go
++++ b/runner/pool/pool.go
+@@ -311,6 +311,38 @@ func (r *basePoolManager) persistJobToDB(ctx context.Context, jobParams params.J
+ 	return nil
+ }
+ 
++func (r *basePoolManager) restoreCompletedJobRunner(ctx context.Context, job *params.Job) error {
++	if job.Action != string(params.JobStatusCompleted) || job.RunnerName != "" {
++		return nil
++	}
++
++	recorded, err := r.store.GetJobByID(ctx, job.WorkflowJobID)
++	if err != nil {
++		if errors.Is(err, runnerErrors.ErrNotFound) {
++			return nil
++		}
++		return fmt.Errorf("restoreCompletedJobRunner: failed to get recorded job: %w", err)
++	}
++	if recorded.RunnerName == "" {
++		return nil
++	}
++
++	// Runner ID and start time distinguish attempts; run_attempt is not persisted.
++	if !recorded.BelongsTo(r.entity) ||
++		recorded.WorkflowJobID != job.WorkflowJobID ||
++		job.RunID == 0 || recorded.RunID != job.RunID ||
++		!strings.EqualFold(recorded.RepositoryOwner, job.RepositoryOwner) ||
++		!strings.EqualFold(recorded.RepositoryName, job.RepositoryName) ||
++		job.GithubRunnerID == 0 || recorded.GithubRunnerID != job.GithubRunnerID ||
++		job.StartedAt.IsZero() || !recorded.StartedAt.Equal(job.StartedAt) ||
++		(recorded.Action != string(params.JobStatusInProgress) && recorded.Action != string(params.JobStatusCompleted)) {
++		return runnerErrors.NewBadRequestError("completed job does not match its recorded runner assignment")
++	}
++
++	job.RunnerName = recorded.RunnerName
++	return nil
++}
++
+ // handleCompletedJob processes a completed job webhook
+ func (r *basePoolManager) handleCompletedJob(ctx context.Context, jobParams params.Job) error {
+ 	// Ignore jobs without a runner
+@@ -473,6 +505,10 @@ func (r *basePoolManager) HandleWorkflowJob(job params.WorkflowJob) error {
+ 		return fmt.Errorf("error converting job to params: %w", err)
+ 	}
+ 
++	if err := r.restoreCompletedJobRunner(ctx, &jobParams); err != nil {
++		return err
++	}
++
+ 	// For in_progress/completed jobs, look up the runner that services the
+ 	// job. A scale set runner means the job is handled by the scale set
+ 	// listener, not by webhooks. A pool runner attributes the job to its
+diff --git a/runner/pool/pool_test.go b/runner/pool/pool_test.go
+index cb90b285..92378ca3 100644
+--- a/runner/pool/pool_test.go
++++ b/runner/pool/pool_test.go
+@@ -228,6 +228,82 @@ func (s *PoolStressTestSuite) TestHandleWorkflowJobFullLifecycle() {
+ 	s.Len(completedJobs, 1, "exactly 1 completed job should exist in DB")
+ }
+ 
++func (s *PoolStressTestSuite) TestCompletedJobWithoutRunnerName() {
++	labels := []string{"self-hosted", "linux", "x64"}
++	startedAt := time.Date(2026, time.November, 1, 8, 25, 50, 0, time.UTC)
++	otherRepo, err := s.store.CreateRepository(s.adminCtx, "other-owner", "other-repo", s.entity.Credentials, "other-secret", params.PoolBalancerTypeRoundRobin, false)
++	s.Require().NoError(err)
++	otherRepoID := mustParseUUID(otherRepo.ID)
++	tests := []struct {
++		name   string
++		change func(*params.Job)
++	}{
++		{name: "matching assignment"},
++		{name: "different run", change: func(j *params.Job) { j.RunID++ }},
++		{name: "different repository", change: func(j *params.Job) { j.RepositoryName = "other-repo" }},
++		{name: "different entity", change: func(j *params.Job) { j.RepoID = &otherRepoID }},
++		{name: "different attempt start", change: func(j *params.Job) { j.StartedAt = j.StartedAt.Add(time.Second) }},
++		{name: "missing attempt start", change: func(j *params.Job) { j.StartedAt = time.Time{} }},
++		{name: "different runner ID", change: func(j *params.Job) { j.GithubRunnerID++ }},
++		{name: "missing runner ID", change: func(j *params.Job) { j.GithubRunnerID = 0 }},
++	}
++
++	for i, tt := range tests {
++		s.Run(tt.name, func() {
++			jobID := int64(70000 + i)
++			runnerName := fmt.Sprintf("completed-runner-%d", i)
++			_, err := s.store.CreateInstance(s.adminCtx, s.pool.ID, params.CreateInstanceParams{
++				Name: runnerName, Status: commonParams.InstanceRunning, RunnerStatus: params.RunnerActive,
++			})
++			s.Require().NoError(err)
++
++			inProgress := s.makeWorkflowJob(jobID, "in_progress", "in_progress", runnerName, labels)
++			inProgress.WorkflowJob.StartedAt = startedAt
++			inProgress.WorkflowJob.RunnerID = int64(100 + i)
++			recorded, err := s.mgr.paramsWorkflowJobToParamsJob(inProgress)
++			s.Require().NoError(err)
++			if tt.change != nil {
++				tt.change(&recorded)
++			}
++			_, err = s.store.CreateOrUpdateJob(s.adminCtx, recorded)
++			s.Require().NoError(err)
++
++			completed := inProgress
++			completed.Action = "completed"
++			completed.WorkflowJob.Status = "completed"
++			completed.WorkflowJob.RunnerName = ""
++			completed.WorkflowJob.CompletedAt = startedAt.Add(time.Minute)
++			err = s.mgr.HandleWorkflowJob(completed)
++			if tt.change == nil {
++				s.Require().NoError(err)
++				s.Require().NoError(s.mgr.HandleWorkflowJob(completed))
++			} else {
++				s.Require().Error(err)
++			}
++
++			instance, err := s.store.GetInstance(s.adminCtx, runnerName)
++			s.Require().NoError(err)
++			job, err := s.store.GetJobByID(s.adminCtx, jobID)
++			s.Require().NoError(err)
++			s.Equal(runnerName, job.RunnerName)
++			if tt.change == nil {
++				s.Equal(params.RunnerTerminated, instance.RunnerStatus)
++				s.Equal(commonParams.InstancePendingDelete, instance.Status)
++				s.Equal("completed", job.Action)
++				s.Equal(inProgress.WorkflowJob.RunnerID, job.GithubRunnerID)
++				s.Require().NotNil(job.PoolID)
++				s.Equal(s.pool.ID, job.PoolID.String())
++			} else {
++				s.Equal(params.RunnerActive, instance.RunnerStatus)
++				s.Equal(commonParams.InstanceRunning, instance.Status)
++				s.Equal("in_progress", job.Action)
++				s.Equal(recorded.RunID, job.RunID)
++				s.True(recorded.StartedAt.Equal(job.StartedAt))
++			}
++		})
++	}
++}
++
+ // TestConcurrentQueuedJobs sends N queued webhooks concurrently with different job IDs
+ // and verifies all are persisted without panics.
+ func (s *PoolStressTestSuite) TestConcurrentQueuedJobs() {

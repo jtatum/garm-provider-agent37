@@ -1,0 +1,48 @@
+name: GARM Agent37 lifecycle proof
+on:
+  workflow_dispatch:
+    inputs:
+      gate:
+        description: Tag that releases the running jobs
+        required: true
+      fail_shard:
+        description: Optional shard that deliberately fails
+        default: none
+jobs:
+  isolated-job:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [one, two, three]
+    runs-on: garm-agent37
+    timeout-minutes: 8
+    defaults:
+      run:
+        shell: sh
+    steps:
+      - name: Verify fresh workspace, private clone, and gated capacity
+        env:
+          REPO_TOKEN: ${{ github.token }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          RELEASE_GATE: ${{ github.event.inputs.gate }}
+          SHARD: ${{ matrix.shard }}
+          FAIL_SHARD: ${{ github.event.inputs.fail_shard }}
+        run: |
+          set -eu
+          test ! -e .previous-job
+          test ! -e /tmp/previous-job
+          test ! -d checkout
+          apk add --no-cache git >/dev/null
+          auth=$(printf 'x-access-token:%s' "$REPO_TOKEN" | base64 | tr -d '\n')
+          git -c http.extraHeader="Authorization: Basic $auth" clone --quiet "$REPO_URL" checkout
+          test -f checkout/README.md
+          deadline=$(( $(date +%s) + 360 ))
+          until git -c http.extraHeader="Authorization: Basic $auth" ls-remote --exit-code "$REPO_URL" "refs/tags/$RELEASE_GATE" >/dev/null 2>&1; do
+            test "$(date +%s)" -lt "$deadline"
+            sleep 1
+          done
+          unset auth REPO_TOKEN
+          printf 'canary\n' > .previous-job
+          printf 'canary\n' > /tmp/previous-job
+          printf 'GARM_FRESH_VM_OK shard=%s runner=%s\n' "$SHARD" "$RUNNER_NAME"
+          test "$SHARD" != "$FAIL_SHARD"

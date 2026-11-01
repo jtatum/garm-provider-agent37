@@ -1,0 +1,176 @@
+import argparse
+import base64
+import json
+import os
+from pathlib import Path
+import subprocess
+import time
+
+import manage as m
+
+PATH = '/repos/lab-admin/runner-proof'
+
+
+def instances():
+    return [{k:i.get(k) for k in ('id','name','provider_id','pool_id','agent_id','status','runner_status')}
+            for i in (m.garm('GET', '/instances') or [])]
+
+
+def cloud_owned():
+    controller = m.read('controller.json')['controller_id']
+    return [i for i in m.cloud('GET','/instances')['data'] if
+            i.get('metadata',{}).get('garm-controller-id') == controller and
+            i.get('metadata',{}).get('garm-provider-id') == m.PROVIDER_ID]
+
+
+def install_workflow():
+    path = PATH + '/contents/.gitea/workflows/garm-agent37.yaml'
+    body = {'content':base64.b64encode((m.ROOT/'burst-workflow.yaml').read_bytes()).decode(),
+            'message':'test: verify GARM Agent37 queue and VM lifecycle','branch':'main'}
+    tree = m.gitea('GET',PATH+'/git/trees/main?recursive=true')['tree']
+    exists = any(f['path']=='.gitea/workflows/garm-agent37.yaml' for f in tree)
+    if exists:
+        old = m.gitea('GET',path)
+        body['sha'] = old['sha']
+    m.gitea('PUT' if exists else 'POST',path,body)
+
+
+def cleanup():
+    errors = []
+    pool = m.read('pool.json')
+    try:
+        m.garm('PUT','/pools/'+pool['id'],{'enabled':False})
+    except Exception as exc:
+        errors.append('disable pool: '+str(exc))
+        try:m.stop()
+        except Exception as stop_error:errors.append('stop controller: '+str(stop_error))
+    try:
+        remaining = cloud_owned()
+        if remaining:
+            env = dict(os.environ)
+            env.update({'GARM_COMMAND':'RemoveAllInstances','GARM_CONTROLLER_ID':m.read('controller.json')['controller_id'],
+                        'GARM_PROVIDER_CONFIG_FILE':str(m.STATE/'provider.toml'),'GARM_INTERFACE_VERSION':'v0.1.1'})
+            result = subprocess.run([str(m.REPO/'bin/garm-provider-agent37')],env=env,capture_output=True,text=True,timeout=60)
+            m.save('emergency-cleanup.json',{'returncode':result.returncode,'stderr':result.stderr})
+            if result.returncode:errors.append('provider cleanup failed; see private evidence')
+    except Exception as exc:
+        errors.append('VM cleanup: '+str(exc))
+    try:
+        key = m.read('ssh-key.json') if (m.STATE/'ssh-key.json').exists() else None
+        keys = m.cloud('GET','/ssh-keys')['data']
+        if key and any(k['id']==key['id'] for k in keys):
+            m.cloud('DELETE','/ssh-keys/'+key['id'])
+        for name in ['id_ed25519','id_ed25519.pub']:(m.STATE/name).unlink(missing_ok=True)
+    except Exception as exc:
+        errors.append('SSH key cleanup: '+str(exc))
+    result = {'at':time.time(),'errors':errors,
+              'remaining_cloud_ids':[i['id'] for i in cloud_owned()],
+              'remaining_workspace_instances':len(m.cloud('GET','/instances')['data']),
+              'remaining_workspace_ssh_keys':len(m.cloud('GET','/ssh-keys')['data']),
+              'gitea_runners':m.gitea('GET',PATH+'/actions/runners')}
+    m.save('cleanup.json',result)
+    if errors or result['remaining_cloud_ids']:
+        raise RuntimeError('Incomplete lab cleanup; inspect private cleanup.json')
+    return result
+
+
+def main(expect_failure=False):
+    install_workflow()
+    old_ids = {r['id'] for r in m.gitea('GET',PATH+'/actions/runs?limit=20')['workflow_runs']}
+    gate = 'garm-lab-release-' + str(int(time.time()))
+    result = {'started_at':time.time(),'gate':gate,'observations':[],'run_id':None,'expected_failures':int(expect_failure)}
+    watcher = None
+    try:
+        m.key()
+        log = (m.STATE/'tunnels.log').open('a')
+        watcher = subprocess.Popen(['python3',str(m.ROOT/'tunnels.py')],stdin=subprocess.DEVNULL,stdout=log,stderr=log)
+        log.close()
+        m.garm('PUT','/pools/'+m.read('pool.json')['id'],{'enabled':True})
+        m.gitea('POST',PATH+'/actions/workflows/garm-agent37.yaml/dispatches',{'ref':'main','inputs':{'gate':gate,'fail_shard':'three' if expect_failure else 'none'}})
+        print('Dispatched three gated jobs; waiting for two running workers.',flush=True)
+        deadline = time.monotonic()+300
+        while time.monotonic()<deadline:
+            rows = m.gitea('GET',PATH+'/actions/runs?limit=20')['workflow_runs']
+            matches = [r for r in rows if r['id'] not in old_ids and r.get('path','').split('@')[0]=='garm-agent37.yaml']
+            if matches:result['run_id']=matches[0]['id']
+            jobs = m.gitea('GET',PATH+'/actions/runs/'+str(result['run_id'])+'/jobs')['jobs'] if result['run_id'] else []
+            own = cloud_owned()
+            observed = {'at':time.time(),'cloud_ids':[i['id'] for i in own],'garm':instances(),
+                        'jobs':[{k:j.get(k) for k in ('id','status','conclusion','runner_id')} for j in jobs]}
+            result['observations'].append(observed)
+            m.save('integration.json',result)
+            assert len(own)<=2,'Provider exceeded its two-VM cap'
+            if any(j.get('conclusion')=='failure' for j in jobs):raise RuntimeError('Proof job failed before release')
+            busy = [j for j in jobs if j['status']=='in_progress']
+            if len(busy)==2 and len(jobs)==3:
+                assert len(own)==2
+                result['before_restart']=observed
+                break
+            time.sleep(1)
+        else:raise RuntimeError('Did not observe two running jobs and one queued within five minutes')
+        print('Two jobs running at the cap; restarting GARM before releasing the queue.',flush=True)
+        m.stop();m.start()
+        deadline=time.monotonic()+30
+        expected=set(result['before_restart']['cloud_ids'])
+        while time.monotonic()<deadline:
+            own=cloud_owned()
+            assert {i['id'] for i in own}==expected,'Controller restart replaced or added active workers'
+            current=instances()
+            if len([i for i in current if i['provider_id'] in expected])==2:
+                result['after_restart']={'at':time.time(),'cloud_ids':sorted(expected),'garm':current}
+                break
+            time.sleep(0.5)
+        else:raise RuntimeError('GARM did not recover active instance records')
+        m.gitea('POST',PATH+'/tags',{'tag_name':gate,'target':'main','message':'Release isolated GARM capacity test'})
+        result['released_at']=time.time()
+        print('Controller recovered both workers; gate released.',flush=True)
+        deadline=time.monotonic()+300
+        while time.monotonic()<deadline:
+            jobs=m.gitea('GET',PATH+'/actions/runs/'+str(result['run_id'])+'/jobs')['jobs']
+            own=cloud_owned()
+            observed={'at':time.time(),'cloud_ids':[i['id'] for i in own],'garm':instances(),
+                      'jobs':[{k:j.get(k) for k in ('id','status','conclusion','runner_id')} for j in jobs]}
+            result['observations'].append(observed)
+            m.save('integration.json',result)
+            assert len(own)<=2,'Provider exceeded its two-VM cap'
+            if all(j['status']=='completed' for j in jobs):
+                assert len(jobs)==3,'Expected three jobs'
+                conclusions=sorted(j['conclusion'] for j in jobs)
+                assert conclusions==(['failure','success','success'] if expect_failure else ['success']*3),'Unexpected job conclusions'
+                assert len({j['runner_id'] for j in jobs})==3,'Runner identity was reused'
+                result['jobs']=jobs
+                if not own and not instances():break
+            time.sleep(1)
+        else:raise RuntimeError('Jobs or automatic scale-to-zero did not complete')
+        all_vms={identifier for o in result['observations'] for identifier in o['cloud_ids']}
+        assert len(all_vms)==3,'Expected exactly one fresh VM per job'
+        result['success']=True
+        result['vm_ids']=sorted(all_vms)
+        result['completed_at']=time.time()
+        m.save('integration.json',result)
+        print(json.dumps({'run_id':result['run_id'],'success':True,'vm_ids':result['vm_ids'],'runner_ids':[j['runner_id'] for j in jobs]}),flush=True)
+    except Exception:
+        for vm in cloud_owned():
+            try:m.save('failure-logs-'+vm['id']+'.json',m.cloud('GET','/instances/'+vm['id']+'/logs?tail=200'))
+            except Exception:pass
+        if result['run_id']:
+            try:m.gitea('POST',PATH+'/actions/runs/'+str(result['run_id'])+'/cancel',{})
+            except Exception:pass
+        m.save('integration.json',result)
+        raise
+    finally:
+        try:
+            clean=cleanup()
+            print(json.dumps(clean),flush=True)
+        finally:
+            if watcher:
+                watcher.terminate()
+                try:watcher.wait(timeout=10)
+                except subprocess.TimeoutExpired:watcher.kill();watcher.wait()
+
+
+if __name__=='__main__':
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--expect-failure',action='store_true')
+    args=parser.parse_args()
+    main(args.expect_failure)

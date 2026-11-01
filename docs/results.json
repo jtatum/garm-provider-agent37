@@ -1,0 +1,165 @@
+{
+  "verified_on": "2026-11-01",
+  "scope": "Synthetic private local Gitea repository; trusted one-job-per-VM workers",
+  "garm": {
+    "base_commit": "33ec0921418a470ca7e00dfb20ae111595da24e1",
+    "patch": "patches/garm-gitea-ephemeral-completion.patch",
+    "patch_sha256": "089a4e80fda3d8a99399eaae68118ef2989ab739aeba0a5a0777b4d129e01a34"
+  },
+  "common": "v0.1.10-0.20261010221645-ec82f622d2d4",
+  "gitea": "28.2.0",
+  "runner": "3.5.0",
+  "template": {
+    "pin": "garm-gitea-runner@1",
+    "image_digest": "sha256:fa7d2c2afd50d8be68a3c2b92de4e957475d06bdc8a15543aeef26bae281f495"
+  },
+  "resources": {
+    "cpu": 4,
+    "memory_gb": 8,
+    "disk_gb": 20,
+    "type": "vm",
+    "region": "us"
+  },
+  "max_instances": 2,
+  "min_idle_runners": 0,
+  "runs": [
+    {
+      "case": "success",
+      "run_id": 10,
+      "assertions_passed": true,
+      "expected_failed_jobs": 0,
+      "started_at": "2026-11-01T08:35:09.285753+00:00",
+      "elapsed_through_scale_zero_seconds": 29.641,
+      "observed_two_jobs_running_seconds": 6.938,
+      "max_observed_vms": 2,
+      "vm_ids": [
+        "afccuflvti",
+        "ars2jxn0sm",
+        "ih8yy1pli7"
+      ],
+      "runner_ids": [
+        11,
+        12,
+        13
+      ],
+      "controller_restart_preserved_vm_ids": true,
+      "jobs": [
+        {
+          "id": 12,
+          "name": "isolated-job (one)",
+          "status": "completed",
+          "conclusion": "success",
+          "runner_id": 11,
+          "started_at": "2026-11-01T08:35:14Z",
+          "completed_at": "2026-11-01T08:35:17Z"
+        },
+        {
+          "id": 13,
+          "name": "isolated-job (three)",
+          "status": "completed",
+          "conclusion": "success",
+          "runner_id": 12,
+          "started_at": "2026-11-01T08:35:15Z",
+          "completed_at": "2026-11-01T08:35:18Z"
+        },
+        {
+          "id": 14,
+          "name": "isolated-job (two)",
+          "status": "completed",
+          "conclusion": "success",
+          "runner_id": 13,
+          "started_at": "2026-11-01T08:35:31Z",
+          "completed_at": "2026-11-01T08:35:33Z"
+        }
+      ],
+      "cleanup": {
+        "remaining_workspace_instances": 0,
+        "remaining_workspace_ssh_keys": 0
+      },
+      "remaining_gitea_runners": 0
+    },
+    {
+      "case": "failure",
+      "run_id": 11,
+      "assertions_passed": true,
+      "expected_failed_jobs": 1,
+      "started_at": "2026-11-01T08:35:51.712965+00:00",
+      "elapsed_through_scale_zero_seconds": 34.777,
+      "observed_two_jobs_running_seconds": 5.5,
+      "max_observed_vms": 2,
+      "vm_ids": [
+        "6xkf6ojjyg",
+        "gwfh9xop91",
+        "im3bla95m8"
+      ],
+      "runner_ids": [
+        14,
+        15,
+        16
+      ],
+      "controller_restart_preserved_vm_ids": true,
+      "jobs": [
+        {
+          "id": 15,
+          "name": "isolated-job (one)",
+          "status": "completed",
+          "conclusion": "success",
+          "runner_id": 14,
+          "started_at": "2026-11-01T08:35:56Z",
+          "completed_at": "2026-11-01T08:35:58Z"
+        },
+        {
+          "id": 16,
+          "name": "isolated-job (three)",
+          "status": "completed",
+          "conclusion": "failure",
+          "runner_id": 15,
+          "started_at": "2026-11-01T08:35:56Z",
+          "completed_at": "2026-11-01T08:35:58Z"
+        },
+        {
+          "id": 17,
+          "name": "isolated-job (two)",
+          "status": "completed",
+          "conclusion": "success",
+          "runner_id": 16,
+          "started_at": "2026-11-01T08:36:19Z",
+          "completed_at": "2026-11-01T08:36:21Z"
+        }
+      ],
+      "cleanup": {
+        "remaining_workspace_instances": 0,
+        "remaining_workspace_ssh_keys": 0
+      },
+      "remaining_gitea_runners": 0
+    }
+  ],
+  "final_cleanup": {
+    "verified_at": 1793522221.144789,
+    "garm_instances": 0,
+    "pool_enabled": false,
+    "workspace_instances": 0,
+    "workspace_ssh_keys": 0,
+    "gitea_runners": 0,
+    "controller_stopped": true
+  },
+  "initial_failure": {
+    "run_id": 9,
+    "cause": "Gitea completed webhook lost ephemeral runner name; stock GARM ignored completion. Removed unsupported post-bootstrap completion callbacks too.",
+    "owned_vms_deleted": 2,
+    "temporary_keys_and_runners_removed": true
+  },
+  "validation": [
+    "make check (provider race tests, Python bootstrap tests, go vet)",
+    "go test -mod=vendor -tags testing -run ^TestPoolStressTestSuite$/TestCompletedJobWithoutRunnerName$ ./runner/pool/",
+    "go test -race -mod=vendor -tags testing ./runner/pool/",
+    "go vet -mod=vendor -tags testing ./runner/pool/",
+    "make fmt GEN_PASSWORD=unused (GARM)",
+    "git diff --check (GARM)",
+    "python3 lab/integration.py",
+    "python3 lab/integration.py --expect-failure",
+    "Linux amd64 static provider cross-build",
+    "source scan for actual lab/API secrets; generated files excluded",
+    "lab Python syntax checks"
+  ]
+}

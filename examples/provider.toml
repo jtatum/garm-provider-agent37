@@ -1,0 +1,8 @@
+provider_id = "agent37-ci"
+api_key_file = "/run/secrets/agent37-api-key"
+state_dir = "/var/lib/garm/agent37"
+region = "us"
+max_instances = 2
+default_disk_gb = 20
+create_timeout = "4m"
+poll_interval = "1s"
