@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent37 ten-concurrency burst</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --foreground: light-dark(#23252b, #e8e9ef);
+  --muted-foreground: light-dark(#5d6069, #b1b5c1);
+  --border: light-dark(#d5d8e0, #454951);
+  --popover: light-dark(#fafbfe, #23262e);
+  --popover-foreground: var(--foreground);
+  --chart-1: light-dark(#315bd6, #8aa9ff);
+  --chart-2: light-dark(#117951, #6dd7b0);
+  --chart-3: light-dark(#aa590c, #eab779);
+  --viz-series-1: var(--chart-1);
+  --viz-series-2: var(--chart-2);
+  --viz-series-3: var(--chart-3);
+  --font-size-base: 14px;
+}
+html, body { margin: 0; padding: 0; background: transparent; }
+#burst-view { color: var(--foreground); font-family: var(--font-sans, system-ui, sans-serif); font-size: var(--font-size-base); position: relative; }
+#burst-view h3 { font-weight: 500; font-size: inherit; margin: 0 0 10px; }
+#burst-view .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0 0 8px; }
+#burst-view .legend button { appearance: none; border: 0; background: transparent; color: var(--foreground); font: inherit; padding: 4px 0; display: inline-flex; align-items: center; gap: 7px; }
+#burst-view .legend button[aria-pressed="false"] { opacity: .45; }
+#burst-view .swatch { width: 19px; height: 3px; display: inline-block; background: var(--series-color); }
+#burst-view .chart { display: block; width: 100%; height: 300px; overflow: visible; }
+#burst-view svg text { fill: var(--foreground); font-size: 12px; font-weight: 400; }
+#burst-view .tooltip { position: absolute; pointer-events: none; padding: 10px 12px; border: 1px solid var(--border); border-radius: 7px; color: var(--popover-foreground); background: var(--popover); font-variant-numeric: tabular-nums; }
+#burst-view .tooltip p { margin: 0; }
+#burst-view .tooltip dl { margin: 5px 0 0; display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; }
+#burst-view .tooltip dt, #burst-view .tooltip dd { margin: 0; }
+@media (pointer: coarse) { #burst-view .legend button { min-height: 44px; } }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+</head>
+<body>
+<figure id="burst-view" style="margin:0">
+<h3>20 jobs · 10 VM slots · observed concurrency</h3>
+<div class="legend" aria-label="Displayed measurements"></div>
+<svg class="chart" role="img" aria-label="VM and job counts during the twenty-job burst. The first ten workers survive a controller restart, the queue drains, and all VMs are deleted."></svg>
+<div class="tooltip" role="tooltip" hidden></div>
+<script type="application/json" id="burst-data">{"concurrency_cap":10,"scale_zero_seconds":36.848,"gate_released_seconds":9.835,"observations":[{"seconds":0.471,"vms":0,"running":0,"queued":20,"completed":0},{"seconds":1.745,"vms":5,"running":0,"queued":20,"completed":0},{"seconds":3.007,"vms":10,"running":0,"queued":20,"completed":0},{"seconds":4.257,"vms":10,"running":0,"queued":20,"completed":0},{"seconds":5.535,"vms":10,"running":2,"queued":18,"completed":0},{"seconds":6.838,"vms":10,"running":6,"queued":14,"completed":0},{"seconds":8.114,"vms":10,"running":8,"queued":12,"completed":0},{"seconds":9.367,"vms":10,"running":10,"queued":10,"completed":0},{"seconds":10.178,"vms":10,"running":10,"queued":10,"completed":0},{"seconds":11.485,"vms":10,"running":1,"queued":10,"completed":9},{"seconds":12.739,"vms":10,"running":0,"queued":10,"completed":10},{"seconds":14.009,"vms":10,"running":0,"queued":10,"completed":10},{"seconds":15.293,"vms":10,"running":0,"queued":10,"completed":10},{"seconds":16.54,"vms":9,"running":0,"queued":10,"completed":10},{"seconds":17.787,"vms":6,"running":0,"queued":10,"completed":10},{"seconds":19.097,"vms":4,"running":0,"queued":10,"completed":10},{"seconds":20.365,"vms":1,"running":0,"queued":10,"completed":10},{"seconds":21.677,"vms":1,"running":0,"queued":10,"completed":10},{"seconds":22.934,"vms":6,"running":0,"queued":10,"completed":10},{"seconds":24.187,"vms":9,"running":0,"queued":10,"completed":10},{"seconds":25.429,"vms":9,"running":1,"queued":9,"completed":10},{"seconds":26.673,"vms":10,"running":1,"queued":8,"completed":11},{"seconds":27.901,"vms":10,"running":5,"queued":3,"completed":12},{"seconds":29.331,"vms":10,"running":2,"queued":1,"completed":17},{"seconds":30.589,"vms":10,"running":0,"queued":1,"completed":19},{"seconds":31.847,"vms":8,"running":1,"queued":0,"completed":19},{"seconds":33.118,"vms":6,"running":0,"queued":0,"completed":20},{"seconds":34.35,"vms":4,"running":0,"queued":0,"completed":20},{"seconds":35.606,"vms":1,"running":0,"queued":0,"completed":20},{"seconds":36.831,"vms":0,"running":0,"queued":0,"completed":20}]}</script>
+</figure>
+<script>
+(() => {
+  const root = document.getElementById('burst-view');
+  const evidence = JSON.parse(document.getElementById('burst-data').textContent);
+  const data = evidence.observations;
+  const svg = d3.select(root.querySelector('svg'));
+  const tooltip = root.querySelector('.tooltip');
+  const colors = ['var(--viz-series-1)', 'var(--viz-series-2)', 'var(--viz-series-3)'];
+  const series = [{key:'vms', name:'VMs allocated'}, {key:'running', name:'Jobs running'}, {key:'queued', name:'Jobs queued'}];
+  const visible = new Set(series.map(s => s.key));
+  const legend = root.querySelector('.legend');
+  for (const [index, s] of series.entries()) {
+    const button = document.createElement('button');
+    button.type = 'button'; button.setAttribute('aria-pressed', 'true');
+    const swatch = document.createElement('span'); swatch.className = 'swatch';
+    swatch.style.setProperty('--series-color', colors[index]); swatch.setAttribute('aria-hidden', 'true');
+    button.append(swatch, document.createTextNode(s.name));
+    button.addEventListener('click', () => {
+      if (visible.has(s.key)) visible.delete(s.key); else visible.add(s.key);
+      button.setAttribute('aria-pressed', String(visible.has(s.key))); draw();
+    });
+    legend.append(button);
+  }
+  function draw() {
+    const width = root.clientWidth, height = 300;
+    const left = 64, right = width - 16, top = 32, bottom = height - 52;
+    svg.attr('viewBox', `0 0 ${width} ${height}`); svg.selectAll('*').remove();
+    tooltip.hidden = true;
+    const xDomain = d3.extent([0, evidence.scale_zero_seconds, ...data.map(d => d.seconds)]);
+    const yDomain = d3.extent([0, evidence.concurrency_cap, ...data.flatMap(d => series.map(s => d[s.key]))]);
+    const x = d3.scaleLinear().domain([xDomain[0], xDomain[1] * 1.035]).range([left + 4, right - 4]);
+    const y = d3.scaleLinear().domain([yDomain[0], yDomain[1] + 2]).range([bottom - 4, top + 4]);
+    svg.append('rect').attr('data-chart-frame','').attr('x',left).attr('y',top).attr('width',right-left).attr('height',bottom-top).attr('fill','none').attr('stroke','var(--border)');
+    for (const count of y.ticks(5)) {
+      svg.append('line').attr('x1',left).attr('x2',right).attr('y1',y(count)).attr('y2',y(count)).attr('stroke','var(--border)').attr('opacity',.35);
+      svg.append('text').attr('x',left-10).attr('y',y(count)+4).attr('text-anchor','end').text(count);
+    }
+    for (const tick of x.ticks(width < 430 ? 3 : 6)) {
+      svg.append('text').attr('x',x(tick)).attr('y',bottom+22).attr('text-anchor','middle').text(tick);
+    }
+    svg.append('text').attr('class','axis-title').attr('data-axis','x').attr('x',(left+right)/2).attr('y',height-8).attr('text-anchor','middle').text('Time since dispatch (seconds)');
+    svg.append('text').attr('class','axis-title').attr('data-axis','y').attr('transform',`translate(17 ${(top+bottom)/2}) rotate(-90)`).attr('text-anchor','middle').text('Count');
+    const releaseX = x(evidence.gate_released_seconds);
+    svg.append('line').attr('x1',releaseX).attr('x2',releaseX).attr('y1',top).attr('y2',bottom).attr('stroke','var(--muted-foreground)').attr('stroke-dasharray','3 4');
+    svg.append('text').attr('x',width < 430 ? left+3 : releaseX).attr('y',top-12).attr('text-anchor',width < 430 ? 'start' : 'middle').attr('data-optional-annotation','').text('Restart verified · gate released');
+    svg.append('line').attr('x1',left).attr('x2',right).attr('y1',y(evidence.concurrency_cap)).attr('y2',y(evidence.concurrency_cap)).attr('stroke','var(--muted-foreground)').attr('stroke-dasharray','5 5');
+    svg.append('text').attr('x',right-6).attr('y',y(evidence.concurrency_cap)-7).attr('text-anchor','end').text('10 VM cap');
+    for (const [index,s] of series.entries()) {
+      if (!visible.has(s.key)) continue;
+      const line=d3.line().x(d=>x(d.seconds)).y(d=>y(d[s.key])).curve(d3.curveStepAfter);
+      svg.append('path').datum(data).attr('d',line).attr('fill','none').attr('stroke',colors[index]).attr('stroke-width',2).attr('stroke-dasharray',index===1?'6 3':null);
+    }
+    const hover=svg.append('g').style('display','none');
+    const guide=hover.append('line').attr('data-chart-hover-guide','').attr('y1',top).attr('y2',bottom).attr('stroke','var(--muted-foreground)');
+    const markers=series.map((s,index)=>hover.append('circle').attr('data-chart-hover-marker',s.key).attr('r',4).attr('fill',colors[index]));
+    let pinned=false;
+    function inspect(event) {
+      const px=Math.max(x.range()[0],Math.min(x.range()[1],d3.pointer(event)[0]));
+      const seconds=x.invert(px);
+      let i=d3.bisector(d=>d.seconds).center(data,seconds);
+      if(data[i].seconds>seconds && i>0)i--;
+      const row=data[i];
+      hover.style('display',null); guide.attr('x1',px).attr('x2',px);
+      tooltip.replaceChildren();
+      const label=document.createElement('p'); label.textContent=seconds.toFixed(1)+' seconds'; tooltip.append(label);
+      const list=document.createElement('dl');
+      for(const [index,s] of series.entries()) {
+        markers[index].style('display',visible.has(s.key)?null:'none').attr('cx',px).attr('cy',y(row[s.key]));
+        if(!visible.has(s.key))continue;
+        const name=document.createElement('dt');name.textContent=s.name;
+        const value=document.createElement('dd');value.textContent=row[s.key];list.append(name,value);
+      }
+      tooltip.append(list);tooltip.hidden=false;
+      tooltip.style.left=Math.max(0,Math.min(width-tooltip.offsetWidth,px+12))+'px';
+      tooltip.style.top=(svg.node().getBoundingClientRect().top-root.getBoundingClientRect().top+top+14)+'px';
+    }
+    svg.append('rect').attr('data-chart-hit','').attr('data-chart-hover-overlay','cross-series').attr('x',left).attr('y',top).attr('width',right-left).attr('height',bottom-top).attr('fill','transparent')
+      .on('pointermove',event=>{if(!pinned)inspect(event);})
+      .on('pointerleave',()=>{if(!pinned){hover.style('display','none');tooltip.hidden=true;}})
+      .on('click',event=>{pinned=!pinned;inspect(event);});
+    const labels=[...svg.node().querySelectorAll('text')];
+    const boxes=labels.map(el=>({el,box:el.getBoundingClientRect()}));
+    for(const {el,box} of boxes) {
+      if(!el.hasAttribute('data-optional-annotation'))continue;
+      if(box.left<root.getBoundingClientRect().left+4 || box.right>root.getBoundingClientRect().right-4)el.remove();
+    }
+  }
+  new ResizeObserver(draw).observe(root); draw();
+})();
+</script>
+</body>
+</html>

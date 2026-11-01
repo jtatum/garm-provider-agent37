@@ -6,7 +6,7 @@ The current workspace reuses the Docker Gitea lab in the sibling `garm-provider-
 
 ## Prepare the existing workspace
 
-Prerequisites: Go 1.26.2+ for the pinned GARM build (the provider itself needs 1.25+), a C compiler for SQLite, Python 3, Docker, OpenSSH, Node.js 20+, an Agent37 workspace with the VM runtime enabled, and an API key stored in a private file. Use the matching GARM source and compatibility patch described in the project README.
+Prerequisites: Go 1.26.2+ for the pinned GARM build (the provider itself needs 1.25+), a C compiler for SQLite, Python 3.11+ for the lab, Docker, OpenSSH, Node.js 20+, an Agent37 workspace with the VM runtime enabled, and an API key stored in a private file. Use the matching GARM source and compatibility patch described in the project README.
 
 From this repository:
 
@@ -58,13 +58,13 @@ python3 lab/integration.py
 python3 lab/integration.py --expect-failure
 ```
 
-`pool` loads the current custom install template and leaves the pool disabled. Each integration run:
+`pool` loads the current custom install template and leaves the pool disabled. Both `configure` and `pool` accept `--concurrency` (default 2, maximum 10); set the same value on `integration.py`. `--jobs` defaults to concurrency plus one and can be increased up to 40. The [ten-VM test](../docs/experiments/ten-concurrency.md) used 20 jobs. The harness verifies both caps and available workspace capacity before dispatch. Each integration run:
 
-1. Installs a synthetic three-job workflow and creates one temporary workspace SSH key.
-2. Enables a pool with zero idle workers and a two-VM cap, then dispatches three jobs.
+1. Installs a synthetic workflow with the requested job count and creates one temporary workspace SSH key.
+2. Enables a pool with zero idle workers and the configured VM cap, then dispatches the jobs.
 3. Establishes temporary SSH reverse forwards to the laptop for each owned VM. The lab uses host networking inside job containers so their loopback Gitea URL reaches the tunnel.
-4. Waits for two running jobs and one queued, restarts GARM, and verifies the same two workers remain.
-5. Creates a repository tag to release the job gate, then requires three distinct runner/VM identities and automatic scale-to-zero. The optional failure variant expects the third shard to fail and still requires VM deletion.
+4. Waits for the configured number of running jobs and the remaining jobs queued, restarts GARM, and verifies the same workers remain.
+5. Creates a repository tag to release the job gate, then requires one distinct runner/VM identity per job and automatic scale-to-zero. The optional failure variant expects the last shard to fail and still requires VM deletion.
 6. Disables the pool, verifies cleanup, revokes its temporary SSH key, and stops its tunnel watcher. On failure it also invokes the provider's scoped cleanup command.
 
 This tunnel watcher is lab infrastructure, not part of the production provider. Production needs routable Gitea/GARM endpoints or an explicit private network. Use bridge networking in production unless a workload has a reviewed need for host networking.

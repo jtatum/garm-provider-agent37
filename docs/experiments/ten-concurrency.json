@@ -1,0 +1,452 @@
+{
+  "verified_on": "2026-11-01",
+  "run_id": 12,
+  "scope": "Synthetic private Gitea clone and gated shell jobs; not a host1 build benchmark",
+  "job_count": 20,
+  "concurrency_cap": 10,
+  "all_jobs_succeeded": true,
+  "resources_per_vm": {
+    "cpu": 4,
+    "memory_gb": 8,
+    "disk_gb": 20
+  },
+  "template": "garm-gitea-runner@1",
+  "max_observed_vms": 10,
+  "max_observed_running_jobs": 10,
+  "dispatched_at": "2026-11-01T08:58:10.024372+00:00",
+  "ten_running_seconds": 9.367,
+  "gate_released_seconds": 9.835,
+  "all_jobs_finished_seconds": 31.976,
+  "scale_zero_seconds": 36.848,
+  "restart_preserved_ten_vm_ids": true,
+  "wallet_before_usd": 9.979734,
+  "wallet_after_usd": 9.968874,
+  "observed_wallet_delta_usd": 0.01086,
+  "vm_ids": [
+    "05m4px1erv",
+    "05unebgp78",
+    "0e5bssv2h7",
+    "3hcagc4jvc",
+    "3rkdocjn15",
+    "cyemh6qz33",
+    "f123pl420x",
+    "fyyyb6j0nx",
+    "geo8exws6c",
+    "gy4t0uc1kl",
+    "kmr8m5uwyc",
+    "kvdbut4lpl",
+    "l9repjq4hz",
+    "nrk62jhdk9",
+    "onaj7cnw5t",
+    "p71x8ad2ny",
+    "tz0xs2hmrz",
+    "upkk3a93ay",
+    "yyfky3d6es",
+    "zl7fqpunqm"
+  ],
+  "jobs": [
+    {
+      "id": 18,
+      "name": "isolated-job (job-01)",
+      "runner_id": 17,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:14Z",
+      "completed_at": "2026-11-01T08:58:21Z"
+    },
+    {
+      "id": 19,
+      "name": "isolated-job (job-02)",
+      "runner_id": 18,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:15Z",
+      "completed_at": "2026-11-01T08:58:20Z"
+    },
+    {
+      "id": 20,
+      "name": "isolated-job (job-03)",
+      "runner_id": 19,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:16Z",
+      "completed_at": "2026-11-01T08:58:20Z"
+    },
+    {
+      "id": 21,
+      "name": "isolated-job (job-04)",
+      "runner_id": 20,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:16Z",
+      "completed_at": "2026-11-01T08:58:21Z"
+    },
+    {
+      "id": 22,
+      "name": "isolated-job (job-05)",
+      "runner_id": 21,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:16Z",
+      "completed_at": "2026-11-01T08:58:20Z"
+    },
+    {
+      "id": 23,
+      "name": "isolated-job (job-06)",
+      "runner_id": 22,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:16Z",
+      "completed_at": "2026-11-01T08:58:20Z"
+    },
+    {
+      "id": 24,
+      "name": "isolated-job (job-07)",
+      "runner_id": 23,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:16Z",
+      "completed_at": "2026-11-01T08:58:20Z"
+    },
+    {
+      "id": 25,
+      "name": "isolated-job (job-08)",
+      "runner_id": 24,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:17Z",
+      "completed_at": "2026-11-01T08:58:20Z"
+    },
+    {
+      "id": 26,
+      "name": "isolated-job (job-09)",
+      "runner_id": 25,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:17Z",
+      "completed_at": "2026-11-01T08:58:20Z"
+    },
+    {
+      "id": 27,
+      "name": "isolated-job (job-10)",
+      "runner_id": 26,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:18Z",
+      "completed_at": "2026-11-01T08:58:20Z"
+    },
+    {
+      "id": 28,
+      "name": "isolated-job (job-11)",
+      "runner_id": 27,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:34Z",
+      "completed_at": "2026-11-01T08:58:36Z"
+    },
+    {
+      "id": 29,
+      "name": "isolated-job (job-12)",
+      "runner_id": 28,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:36Z",
+      "completed_at": "2026-11-01T08:58:37Z"
+    },
+    {
+      "id": 30,
+      "name": "isolated-job (job-13)",
+      "runner_id": 29,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:36Z",
+      "completed_at": "2026-11-01T08:58:38Z"
+    },
+    {
+      "id": 31,
+      "name": "isolated-job (job-14)",
+      "runner_id": 30,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:36Z",
+      "completed_at": "2026-11-01T08:58:38Z"
+    },
+    {
+      "id": 32,
+      "name": "isolated-job (job-15)",
+      "runner_id": 31,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:37Z",
+      "completed_at": "2026-11-01T08:58:38Z"
+    },
+    {
+      "id": 33,
+      "name": "isolated-job (job-16)",
+      "runner_id": 32,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:37Z",
+      "completed_at": "2026-11-01T08:58:38Z"
+    },
+    {
+      "id": 34,
+      "name": "isolated-job (job-17)",
+      "runner_id": 33,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:37Z",
+      "completed_at": "2026-11-01T08:58:38Z"
+    },
+    {
+      "id": 35,
+      "name": "isolated-job (job-18)",
+      "runner_id": 34,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:38Z",
+      "completed_at": "2026-11-01T08:58:39Z"
+    },
+    {
+      "id": 36,
+      "name": "isolated-job (job-19)",
+      "runner_id": 35,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:38Z",
+      "completed_at": "2026-11-01T08:58:39Z"
+    },
+    {
+      "id": 37,
+      "name": "isolated-job (job-20)",
+      "runner_id": 36,
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T08:58:41Z",
+      "completed_at": "2026-11-01T08:58:42Z"
+    }
+  ],
+  "observations": [
+    {
+      "seconds": 0.471,
+      "vms": 0,
+      "running": 0,
+      "queued": 20,
+      "completed": 0
+    },
+    {
+      "seconds": 1.745,
+      "vms": 5,
+      "running": 0,
+      "queued": 20,
+      "completed": 0
+    },
+    {
+      "seconds": 3.007,
+      "vms": 10,
+      "running": 0,
+      "queued": 20,
+      "completed": 0
+    },
+    {
+      "seconds": 4.257,
+      "vms": 10,
+      "running": 0,
+      "queued": 20,
+      "completed": 0
+    },
+    {
+      "seconds": 5.535,
+      "vms": 10,
+      "running": 2,
+      "queued": 18,
+      "completed": 0
+    },
+    {
+      "seconds": 6.838,
+      "vms": 10,
+      "running": 6,
+      "queued": 14,
+      "completed": 0
+    },
+    {
+      "seconds": 8.114,
+      "vms": 10,
+      "running": 8,
+      "queued": 12,
+      "completed": 0
+    },
+    {
+      "seconds": 9.367,
+      "vms": 10,
+      "running": 10,
+      "queued": 10,
+      "completed": 0
+    },
+    {
+      "seconds": 10.178,
+      "vms": 10,
+      "running": 10,
+      "queued": 10,
+      "completed": 0
+    },
+    {
+      "seconds": 11.485,
+      "vms": 10,
+      "running": 1,
+      "queued": 10,
+      "completed": 9
+    },
+    {
+      "seconds": 12.739,
+      "vms": 10,
+      "running": 0,
+      "queued": 10,
+      "completed": 10
+    },
+    {
+      "seconds": 14.009,
+      "vms": 10,
+      "running": 0,
+      "queued": 10,
+      "completed": 10
+    },
+    {
+      "seconds": 15.293,
+      "vms": 10,
+      "running": 0,
+      "queued": 10,
+      "completed": 10
+    },
+    {
+      "seconds": 16.54,
+      "vms": 9,
+      "running": 0,
+      "queued": 10,
+      "completed": 10
+    },
+    {
+      "seconds": 17.787,
+      "vms": 6,
+      "running": 0,
+      "queued": 10,
+      "completed": 10
+    },
+    {
+      "seconds": 19.097,
+      "vms": 4,
+      "running": 0,
+      "queued": 10,
+      "completed": 10
+    },
+    {
+      "seconds": 20.365,
+      "vms": 1,
+      "running": 0,
+      "queued": 10,
+      "completed": 10
+    },
+    {
+      "seconds": 21.677,
+      "vms": 1,
+      "running": 0,
+      "queued": 10,
+      "completed": 10
+    },
+    {
+      "seconds": 22.934,
+      "vms": 6,
+      "running": 0,
+      "queued": 10,
+      "completed": 10
+    },
+    {
+      "seconds": 24.187,
+      "vms": 9,
+      "running": 0,
+      "queued": 10,
+      "completed": 10
+    },
+    {
+      "seconds": 25.429,
+      "vms": 9,
+      "running": 1,
+      "queued": 9,
+      "completed": 10
+    },
+    {
+      "seconds": 26.673,
+      "vms": 10,
+      "running": 1,
+      "queued": 8,
+      "completed": 11
+    },
+    {
+      "seconds": 27.901,
+      "vms": 10,
+      "running": 5,
+      "queued": 3,
+      "completed": 12
+    },
+    {
+      "seconds": 29.331,
+      "vms": 10,
+      "running": 2,
+      "queued": 1,
+      "completed": 17
+    },
+    {
+      "seconds": 30.589,
+      "vms": 10,
+      "running": 0,
+      "queued": 1,
+      "completed": 19
+    },
+    {
+      "seconds": 31.847,
+      "vms": 8,
+      "running": 1,
+      "queued": 0,
+      "completed": 19
+    },
+    {
+      "seconds": 33.118,
+      "vms": 6,
+      "running": 0,
+      "queued": 0,
+      "completed": 20
+    },
+    {
+      "seconds": 34.35,
+      "vms": 4,
+      "running": 0,
+      "queued": 0,
+      "completed": 20
+    },
+    {
+      "seconds": 35.606,
+      "vms": 1,
+      "running": 0,
+      "queued": 0,
+      "completed": 20
+    },
+    {
+      "seconds": 36.831,
+      "vms": 0,
+      "running": 0,
+      "queued": 0,
+      "completed": 20
+    }
+  ],
+  "cleanup": {
+    "at": 1793523584.614242,
+    "garm_instances": 0,
+    "pool_enabled": false,
+    "pool_cap": 2,
+    "provider_cap": 2,
+    "workspace_instances": 0,
+    "workspace_ssh_keys": 0,
+    "gitea_runners": 0,
+    "controller_stopped": true
+  }
+}

@@ -145,7 +145,7 @@ exec_timeout_seconds = 240
 api_key_file = "{settings['agent37_key_file']}"
 state_dir = "{STATE / 'provider-state'}"
 region = "us"
-max_instances = 2
+max_instances = {args.concurrency}
 default_disk_gb = 20
 create_timeout = "3m"
 poll_interval = "1s"
@@ -198,7 +198,7 @@ def setup():
     print(json.dumps({'controller_id': controller.get('controller_id'), 'repository_id': repo['id']}))
 
 
-def pool():
+def pool(concurrency=2):
     template_path = REPO / 'templates/gitea-agent37.py.tmpl'
     templates = garm('GET', '/templates') or []
     body = {'name': 'agent37-gitea', 'description': 'Fresh Agent37 VM Gitea runner',
@@ -213,7 +213,7 @@ def pool():
     rid = read('repository.json')['id']
     pools = garm('GET', '/repositories/' + rid + '/pools') or []
     existing = next((p for p in pools if p['provider_name'] == 'agent37-lab'), None)
-    spec = {'provider_name': 'agent37-lab', 'max_runners': 2, 'min_idle_runners': 0,
+    spec = {'provider_name': 'agent37-lab', 'max_runners': concurrency, 'min_idle_runners': 0,
             'image': 'garm-gitea-runner@1', 'flavor': 'default', 'os_type': 'linux',
             'os_arch': 'amd64', 'tags': ['garm-agent37'], 'enabled': False,
             'runner_prefix': 'a37lab', 'runner_bootstrap_timeout': 5, 'template_id': t['id'],
@@ -244,10 +244,13 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser()
     p.add_argument('operation', choices=['configure','start','stop','restart','setup','pool','key','status'])
     p.add_argument('--key-file')
+    p.add_argument('--concurrency',type=int,choices=range(1,11),default=2)
     p.add_argument('--gitea-credentials', default=str(REPO.parent / 'garm-provider-boat/lab/.state/credentials.json'))
     args = p.parse_args()
     if args.operation == 'configure':
         configure(args)
+    elif args.operation == 'pool':
+        pool(args.concurrency)
     elif args.operation == 'restart':
         stop(); start()
     else:

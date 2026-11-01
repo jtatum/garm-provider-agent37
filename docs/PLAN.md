@@ -21,6 +21,8 @@ Build a GARM external provider for Linux amd64 Gitea runners on fresh Agent37 VM
 5. Confirm automatic deletion and scale to zero, then disable the lab pool and verify no owned cloud VMs, Gitea runners, or temporary SSH keys remain. Preserve the local Gitea data.
 6. Record failures honestly and resolve implementation defects before marking acceptance complete. Unit tests cover failure modes not deliberately induced against paid infrastructure.
 
+A later [twenty-job, ten-VM acceptance run](experiments/ten-concurrency.md) passed with the same lifecycle assertions. The harness supports explicit concurrency and job count.
+
 ## Initial boundaries
 
 - Gitea/Linux/amd64 custom template; GitHub, Windows, ARM, agent mode and arbitrary cloud-init provisioning are not v1 acceptance claims.
