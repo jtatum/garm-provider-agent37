@@ -1,0 +1,135 @@
+diff --git a/runner/pool/allocation_test.go b/runner/pool/allocation_test.go
+new file mode 100644
+index 00000000..5191c1c4
+--- /dev/null
++++ b/runner/pool/allocation_test.go
+@@ -0,0 +1,129 @@
++// Copyright 2026 Cloudbase Solutions SRL
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++//go:build testing
++
++package pool
++
++import (
++	"context"
++	"sync"
++
++	"github.com/google/uuid"
++
++	commonParams "github.com/cloudbase/garm-provider-common/params"
++	"github.com/cloudbase/garm/cache"
++	"github.com/cloudbase/garm/locking"
++	"github.com/cloudbase/garm/params"
++)
++
++var allocationLocker = sync.OnceValue(func() error {
++	locker, err := locking.NewLocalLocker(context.Background(), nil)
++	if err != nil {
++		return err
++	}
++	return locking.RegisterLocker(locker)
++})
++
++func (s *PoolStressTestSuite) TestSwappedJobsCreateSurplusRunner() {
++	s.checkSwappedJobAllocation(3)
++}
++
++func (s *PoolStressTestSuite) TestSwappedJobsRespectPoolCapacity() {
++	s.checkSwappedJobAllocation(2)
++}
++
++func (s *PoolStressTestSuite) checkSwappedJobAllocation(maxRunners uint) {
++	s.T().Helper()
++	s.Require().NoError(allocationLocker())
++	s.setupProviderMocks()
++	s.mgr.controllerInfo.MinimumJobAgeBackoff = 0
++	pool, err := s.store.UpdateEntityPool(s.adminCtx, s.entity, s.pool.ID, params.UpdatePoolParams{MaxRunners: &maxRunners})
++	s.Require().NoError(err)
++	s.pool = pool
++	cache.SetEntityPool(s.entity.ID, pool)
++
++	labels := []string{"self-hosted", "linux", "x64"}
++	const jobA, jobB int64 = 61001, 61002
++	for _, id := range []int64{jobA, jobB} {
++		s.Require().NoError(s.mgr.HandleWorkflowJob(s.makeWorkflowJob(id, "queued", "queued", "", labels)))
++	}
++	s.syncJobsFromDB()
++	s.Require().NoError(s.mgr.consumeQueuedJobs())
++	instances, err := s.store.ListPoolInstances(s.adminCtx, pool.ID, false)
++	s.Require().NoError(err)
++	s.Require().Len(instances, 2)
++	runners := map[int64]string{}
++	for _, instance := range instances {
++		runners[jobIDFromLabels(instance.AditionalLabels)] = instance.Name
++	}
++	s.Require().Contains(runners, jobA)
++	s.Require().Contains(runners, jobB)
++
++	_, err = s.store.ForceUpdateInstance(s.adminCtx, runners[jobA], params.UpdateInstanceParams{
++		Status: commonParams.InstanceRunning, RunnerStatus: params.RunnerIdle,
++	})
++	s.Require().NoError(err)
++	s.Require().NoError(s.mgr.HandleWorkflowJob(s.makeWorkflowJob(jobB, "in_progress", "in_progress", runners[jobA], labels)))
++	queued, err := s.store.GetJobByID(s.adminCtx, jobA)
++	s.Require().NoError(err)
++	s.Equal(uuid.Nil, queued.LockedBy)
++	pending, err := s.store.GetInstance(s.adminCtx, runners[jobB])
++	s.Require().NoError(err)
++	s.Equal(params.RunnerPending, pending.RunnerStatus)
++
++	s.syncJobsFromDB()
++	s.Require().NoError(s.mgr.consumeQueuedJobs())
++	instances, err = s.store.ListPoolInstances(s.adminCtx, pool.ID, false)
++	s.Require().NoError(err)
++	s.Require().Len(instances, int(maxRunners))
++	var surplus string
++	for _, instance := range instances {
++		if instance.Name != runners[jobA] && instance.Name != runners[jobB] {
++			surplus = instance.Name
++			s.Equal(jobA, jobIDFromLabels(instance.AditionalLabels))
++		}
++	}
++
++	_, err = s.store.ForceUpdateInstance(s.adminCtx, runners[jobB], params.UpdateInstanceParams{
++		Status: commonParams.InstanceRunning, RunnerStatus: params.RunnerIdle,
++	})
++	s.Require().NoError(err)
++	s.Require().NoError(s.mgr.HandleWorkflowJob(s.makeWorkflowJob(jobA, "in_progress", "in_progress", runners[jobB], labels)))
++	s.syncJobsFromDB()
++	s.Empty(s.mgr.getQueuedJobs())
++	if maxRunners == 3 {
++		s.Require().NotEmpty(surplus)
++		_, err = s.store.ForceUpdateInstance(s.adminCtx, surplus, params.UpdateInstanceParams{
++			Status: commonParams.InstanceRunning, RunnerStatus: params.RunnerIdle,
++		})
++		s.Require().NoError(err)
++	} else {
++		s.Empty(surplus)
++	}
++	s.Require().NoError(s.mgr.scaleDownOnePool(s.adminCtx, pool))
++	for _, name := range runners {
++		instance, err := s.store.GetInstance(s.adminCtx, name)
++		s.Require().NoError(err)
++		s.Equal(params.RunnerActive, instance.RunnerStatus)
++		s.Equal(commonParams.InstanceRunning, instance.Status)
++	}
++	if surplus != "" {
++		instance, err := s.store.GetInstance(s.adminCtx, surplus)
++		s.Require().NoError(err)
++		s.Equal(params.RunnerIdle, instance.RunnerStatus)
++		s.Equal(commonParams.InstancePendingDelete, instance.Status)
++	}
++	s.T().Logf("two jobs, cap %d: %d runner records; unused worker selected for deletion: %t", maxRunners, len(instances), surplus != "")
++}

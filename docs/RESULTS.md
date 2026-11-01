@@ -47,6 +47,6 @@ Provider race tests, bootstrap Python tests and Go vet passed via `make check`. 
 
 A subsequent [twenty-job burst at ten concurrent VMs](experiments/ten-concurrency.md) also passed, including restart recovery and automatic cleanup.
 
-A subsequent [37-check trusted workload](experiments/trusted-workload.md) passed all jobs using a cached Ubuntu job image. GARM requested one surplus idle worker, so the exact-allocation assertion remains failed; automatic cleanup and the cap of ten passed. Private source and raw logs are retained outside this repository.
+A subsequent [37-check trusted workload](experiments/trusted-workload.md) passed all jobs using a cached Ubuntu job image. GARM requested one surplus idle worker, so the exact-allocation assertion remains failed; automatic cleanup and the cap of ten passed. A [deterministic reproduction](experiments/garm-surplus-reproduction.md) confirmed this is anticipated best-effort scheduling behavior, not a provider duplicate-create defect. Private source and raw logs are retained outside this repository.
 
 Still unvalidated: production workload behavior and BuildKit cache selection; production endpoint routing, TLS and secrets; sustained high-concurrency workloads; account quota/funding exhaustion under live load; missed or reordered forge-event recovery; multiple controllers; untrusted-fork policy; production release/upgrade procedures. VM reuse, cooldown and spending enforcement are not implemented. Agent37 account automatic top-up settings were not changed. The configured VM cap is not a billing cap.

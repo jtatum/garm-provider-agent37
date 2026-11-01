@@ -1,6 +1,6 @@
 # Local Gitea / GARM integration lab
 
-This lab runs the real GARM external-provider protocol, real Agent37 VMs, and a synthetic private Gitea repository. It does not deploy to host1. Every test VM has one ephemeral runner and is deleted after one job. Cloud creation spends account credit.
+This lab runs the real GARM external-provider protocol, real Agent37 VMs, and a synthetic private Gitea repository. It does not deploy to host1. Each test VM hosts at most one ephemeral job and is then deleted; GARM may also create and retire an unused idle worker. Cloud creation spends account credit.
 
 The current workspace reuses the Docker Gitea lab in the sibling `garm-provider-boat` repository. That name is historical; Boat is not involved in these tests. Gitea listens on `127.0.0.1:13000`, native GARM on `127.0.0.1:19997`. Keep `.state/` private: it contains credentials, tokens, database, and diagnostic logs. It is ignored by Git.
 
@@ -108,7 +108,7 @@ python3 lab/workload_run.py --workflow reviewed-workload.yaml \
   --concurrency 2 --jobs 3 --record workload-smoke --timeout 1200
 ```
 
-Match both pool/provider caps to `--concurrency` first. The harness checks available account slots and starts from a disabled zero-idle pool with no workers. It requires the declared number of jobs to finish and the pool to scale to zero, then disables the pool and revokes its temporary SSH key. Failed jobs or a mismatch between expected jobs, distinct runners and observed VMs produce a failed result even when cleanup succeeds. On interruption it cancels the run and invokes scoped cleanup. Check the saved cleanup result and GARM records before another attempt.
+Match both pool/provider caps to `--concurrency` first. The harness checks available account slots and starts from a disabled zero-idle pool with no workers. It requires the declared number of jobs to finish and the pool to scale to zero, then disables the pool and revokes its temporary SSH key. Failed jobs or a mismatch between expected jobs, distinct runners and observed VMs produce a failed result even when cleanup succeeds. The exact VM-start total is deliberately strict: [GARM can create surplus idle workers](../docs/experiments/garm-surplus-reproduction.md), so inspect an allocation-only failure separately from job, identity, capacity or cleanup failures. On interruption it cancels the run and invokes scoped cleanup. Check the saved cleanup result and GARM records before another attempt.
 
 This command executes the installed workflow; it does not rewrite or audit it. Use a private source snapshot and explicit dispatch triggers. Review agent calls, live operational actions, publication steps, and production credential requirements before importing an existing workflow into the lab. Keep source snapshots and raw logs in ignored private state. The public provider repository contains no private workload source.
 

@@ -34,7 +34,7 @@ An initial smoke attempt failed image identity verification: Docker's containerd
 
 GARM logs show a runner created for a queued job taking a different job. GARM then requested another worker for the original job while other workers were still starting. That final worker registered idle and never received work. Creation began at 17:42:58.424 UTC, idle scale-down began at 17:43:18.422, and GARM removed its record at 17:43:25.015.
 
-This is consistent with GARM's queued-job lock/replacement logic, rather than a duplicate Agent37 create retry. A deterministic reproducer is still needed before proposing an upstream correction. The harness retains its failed exact-allocation assertion; all job conclusions, the ten-VM cap and automatic cleanup passed. No new GARM patch is claimed for this finding.
+A subsequent [deterministic reproduction](garm-surplus-reproduction.md) confirmed this sequence on unchanged upstream GARM. Its best-effort webhook scheduler explicitly anticipates surplus workers; an exact one-start-per-job total is not guaranteed. The harness retains its failed exact-allocation assertion; all job conclusions, the ten-VM cap and automatic cleanup passed. This is an efficiency finding, and no runtime GARM patch is proposed.
 
 ## Cleanup and reproduction
 
