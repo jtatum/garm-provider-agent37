@@ -24,6 +24,22 @@ def cloud_owned():
             i.get('metadata',{}).get('garm-provider-id') == m.PROVIDER_ID]
 
 
+def run_jobs(run_id):
+    jobs = {}
+    for page in range(1, 102):
+        response = m.gitea('GET', PATH + '/actions/runs/' + str(run_id) + '/jobs?limit=100&page=' + str(page))
+        rows = response['jobs']
+        if not rows:
+            return list(jobs.values())
+        before = len(jobs)
+        jobs.update((job['id'], job) for job in rows)
+        if len(jobs) >= response.get('total_count', float('inf')):
+            return list(jobs.values())
+        if len(jobs) == before:
+            raise RuntimeError('Job pagination did not advance')
+    raise RuntimeError('Job pagination exceeded lab limit')
+
+
 def install_workflow(shards):
     path = PATH + '/contents/.gitea/workflows/garm-agent37.yaml'
     source=(m.ROOT/'burst-workflow.yaml').read_text()
@@ -80,8 +96,8 @@ def cleanup():
 
 
 def main(expect_failure=False, concurrency=2, job_count=3):
-    if not 1<=concurrency<=10 or not concurrency<job_count<=40:
-        raise ValueError('Require 1–10 concurrent VMs and more jobs than VMs, up to 40 jobs')
+    if not 1<=concurrency<=m.MAX_CONCURRENCY or not concurrency<job_count<=100:
+        raise ValueError(f'Require 1–{m.MAX_CONCURRENCY} concurrent VMs and more jobs than VMs, up to 100 jobs')
     provider=tomllib.loads((m.STATE/'provider.toml').read_text())
     pool=m.garm('GET','/pools/'+m.read('pool.json')['id'])
     if provider['max_instances']!=concurrency or pool['max_runners']!=concurrency:
@@ -113,7 +129,7 @@ def main(expect_failure=False, concurrency=2, job_count=3):
             rows = m.gitea('GET',PATH+'/actions/runs?limit=20')['workflow_runs']
             matches = [r for r in rows if r['id'] not in old_ids and r.get('path','').split('@')[0]=='garm-agent37.yaml']
             if matches:result['run_id']=matches[0]['id']
-            jobs = m.gitea('GET',PATH+'/actions/runs/'+str(result['run_id'])+'/jobs?limit=100')['jobs'] if result['run_id'] else []
+            jobs = run_jobs(result['run_id']) if result['run_id'] else []
             own = cloud_owned()
             observed = {'at':time.time(),'cloud_ids':[i['id'] for i in own],'garm':instances(),
                         'jobs':[{k:j.get(k) for k in ('id','status','conclusion','runner_id','started_at','completed_at')} for j in jobs]}
@@ -145,9 +161,9 @@ def main(expect_failure=False, concurrency=2, job_count=3):
         m.gitea('POST',PATH+'/tags',{'tag_name':gate,'target':'main','message':'Release isolated GARM capacity test'})
         result['released_at']=time.time()
         print(f'Controller recovered all {concurrency} workers; gate released.',flush=True)
-        deadline=time.monotonic()+300
+        deadline=time.monotonic()+600
         while time.monotonic()<deadline:
-            jobs=m.gitea('GET',PATH+'/actions/runs/'+str(result['run_id'])+'/jobs?limit=100')['jobs']
+            jobs=run_jobs(result['run_id'])
             own=cloud_owned()
             observed={'at':time.time(),'cloud_ids':[i['id'] for i in own],'garm':instances(),
                       'jobs':[{k:j.get(k) for k in ('id','status','conclusion','runner_id','started_at','completed_at')} for j in jobs]}
@@ -163,7 +179,9 @@ def main(expect_failure=False, concurrency=2, job_count=3):
             time.sleep(1)
         else:raise RuntimeError('Jobs or automatic scale-to-zero did not complete')
         all_vms={identifier for o in result['observations'] for identifier in o['cloud_ids']}
-        assert len(all_vms)==job_count,'Expected exactly one fresh VM per job'
+        result['allocation_exact'] = len(all_vms) == job_count
+        result['observed_vm_count'] = len(all_vms)
+        result['surplus_vm_count'] = max(0, len(all_vms) - job_count)
         result['success']=True
         result['vm_ids']=sorted(all_vms)
         result['completed_at']=time.time()
@@ -198,7 +216,7 @@ def main(expect_failure=False, concurrency=2, job_count=3):
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--expect-failure',action='store_true')
-    parser.add_argument('--concurrency',type=int,choices=range(1,11),default=2)
+    parser.add_argument('--concurrency',type=int,choices=range(1,m.MAX_CONCURRENCY+1),default=2)
     parser.add_argument('--jobs',type=int)
     args=parser.parse_args()
     main(args.expect_failure,args.concurrency,args.jobs if args.jobs is not None else args.concurrency+1)

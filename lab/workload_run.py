@@ -98,7 +98,7 @@ def run(workflow, concurrency, expected_jobs, record, timeout):
                     result['run_id'] = matches[0]['id']
                     print('Run ' + str(result['run_id']) + ' dispatched: ' + workflow, flush=True)
             if result['run_id']:
-                jobs = m.gitea('GET', lifecycle.PATH + '/actions/runs/' + str(result['run_id']) + '/jobs?limit=100')['jobs']
+                jobs = lifecycle.run_jobs(result['run_id'])
             own = lifecycle.cloud_owned()
             current = lifecycle.instances()
             all_vms.update(vm['id'] for vm in own)
@@ -167,7 +167,7 @@ def run(workflow, concurrency, expected_jobs, record, timeout):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--workflow', required=True)
-    parser.add_argument('--concurrency', type=int, choices=range(1,11), required=True)
+    parser.add_argument('--concurrency', type=int, choices=range(1,m.MAX_CONCURRENCY+1), required=True)
     parser.add_argument('--jobs', type=int, required=True)
     parser.add_argument('--record', required=True)
     parser.add_argument('--timeout', type=int, default=1200)

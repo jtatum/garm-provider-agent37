@@ -79,7 +79,7 @@ python3 lab/integration.py
 python3 lab/integration.py --expect-failure
 ```
 
-`pool` loads the current custom install template and leaves the pool disabled. Both `configure` and `pool` accept `--concurrency` (default 2, maximum 10); set the same value on `integration.py`. `--jobs` defaults to concurrency plus one and can be increased up to 40. The [ten-VM test](../docs/experiments/ten-concurrency.md) used 20 jobs. The harness verifies both caps and available workspace capacity before dispatch. Each integration run:
+`pool` loads the current custom install template and leaves the pool disabled. Both `configure` and `pool` accept `--concurrency` (default 2, maximum 45); set the same value on `integration.py`. `--jobs` defaults to concurrency plus one and can be increased up to 100. The [ten-VM test](../docs/experiments/ten-concurrency.md) used 20 jobs. The harness verifies both caps and available workspace capacity before dispatch. Each integration run:
 
 1. Installs a synthetic workflow with the requested job count and creates one temporary workspace SSH key.
 2. Enables a pool with zero idle workers and the configured VM cap, then dispatches the jobs.
@@ -113,3 +113,6 @@ Match both pool/provider caps to `--concurrency` first. The harness checks avail
 This command executes the installed workflow; it does not rewrite or audit it. Use a private source snapshot and explicit dispatch triggers. Review agent calls, live operational actions, publication steps, and production credential requirements before importing an existing workflow into the lab. Keep source snapshots and raw logs in ignored private state. The public provider repository contains no private workload source.
 
 Guest samples are periodic observations, so short-lived peaks may be missed. Cached job-image startup, action downloads, dependency downloads, and Buildx work are separate costs. Keep workload execution and queue/startup measurements separate when comparing runs.
+
+At higher concurrency, GARM can provision surplus workers while queued jobs change ownership. The harness requires unique runner identities, the configured VM cap, restart recovery, successful jobs, and automatic cleanup. It records `allocation_exact` and `surplus_vm_count` separately; exact one-VM-per-job allocation is not guaranteed by GARM.
+The post-release deadline is ten minutes: GARM halves surplus idle capacity on each one-minute scale-down pass, so a large burst can need several passes after the final job.

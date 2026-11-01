@@ -40,7 +40,7 @@ def resolve_job_image(reference):
     return reference, digest, 'garm-template-cache/job:' + digest.split(':')[1][:16]
 
 
-def build(name, job_image=None):
+def build(name, job_image=None, tailscale=False):
     if not re.fullmatch(r'[a-z][a-z0-9-]{2,62}', name):
         raise RuntimeError('Use a lowercase workspace template name')
     context = m.REPO / 'images/runner'
@@ -48,6 +48,11 @@ def build(name, job_image=None):
     if any(not (context / n).is_file() or (context / n).is_symlink() for n in names):
         raise RuntimeError('Prepare the five regular image context files first')
     files = {n:(context/n).read_bytes() for n in names}
+    if tailscale:
+        declaration = b'ARG GARM_TAILSCALE_ENABLED=0'
+        if files['Dockerfile'].count(declaration) != 1:
+            raise RuntimeError('Runner Dockerfile is missing its optional Tailscale build argument')
+        files['Dockerfile'] = files['Dockerfile'].replace(declaration, b'ARG GARM_TAILSCALE_ENABLED=1')
     cached = None
     if job_image:
         source, digest, reference = resolve_job_image(job_image)
@@ -72,7 +77,7 @@ ENV GARM_CACHED_JOB_IMAGE={reference}
     size = archive.stat().st_size
     result = m.cloud('POST','/template-builds',{'name':name,'size_bytes':size})
     m.save('image-build.json',{'id':result['id'],'name':name,'started_at':time.time(),
-                              'context_bytes':size,'files_sha256':manifest,'cached_job_image':cached})
+                              'tailscale_enabled':tailscale,'context_bytes':size,'files_sha256':manifest,'cached_job_image':cached})
     if not result['upload_url'].startswith('https://'):
         raise RuntimeError('Build service returned a non-HTTPS upload URL')
     req = urllib.request.Request(result['upload_url'],data=archive.read_bytes(),method='PUT',
@@ -102,6 +107,7 @@ if __name__=='__main__':
     parser.add_argument('operation',choices=['build','status'])
     parser.add_argument('--name',default='garm-gitea-runner')
     parser.add_argument('--job-image')
+    parser.add_argument('--tailscale',action='store_true',help='Build the optional Tailscale/Docker DNS image variant')
     args=parser.parse_args()
-    if args.operation=='build':build(args.name,args.job_image)
+    if args.operation=='build':build(args.name,args.job_image,args.tailscale)
     else:status()

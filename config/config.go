@@ -14,17 +14,19 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/jtatum/garm-provider-agent37/client"
+	"github.com/jtatum/garm-provider-agent37/tailscale"
 )
 
 type Config struct {
-	ProviderID    string `toml:"provider_id"`
-	APIKeyFile    string `toml:"api_key_file"`
-	StateDir      string `toml:"state_dir"`
-	Region        string `toml:"region"`
-	MaxInstances  int    `toml:"max_instances"`
-	DefaultDiskGB int    `toml:"default_disk_gb"`
-	CreateTimeout string `toml:"create_timeout"`
-	PollInterval  string `toml:"poll_interval"`
+	Tailscale     tailscale.Config `toml:"tailscale"`
+	ProviderID    string           `toml:"provider_id"`
+	APIKeyFile    string           `toml:"api_key_file"`
+	StateDir      string           `toml:"state_dir"`
+	Region        string           `toml:"region"`
+	MaxInstances  int              `toml:"max_instances"`
+	DefaultDiskGB int              `toml:"default_disk_gb"`
+	CreateTimeout string           `toml:"create_timeout"`
+	PollInterval  string           `toml:"poll_interval"`
 }
 
 type ExtraSpecs struct {
@@ -80,6 +82,9 @@ func (c Config) Validate() error {
 	poll, err := time.ParseDuration(c.PollInterval)
 	if err != nil || poll < 100*time.Millisecond || poll > 30*time.Second {
 		return fmt.Errorf("Validate: poll_interval must be between 100ms and 30s")
+	}
+	if err := c.Tailscale.Validate(); err != nil {
+		return fmt.Errorf("Validate: %w", err)
 	}
 	return nil
 }
@@ -148,6 +153,6 @@ func (c Config) Resources(image, flavor, extraSpecs string) (client.Resources, e
 	return resources, nil
 }
 
-const JSONSchema = `{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["provider_id","api_key_file","state_dir"],"properties":{"provider_id":{"type":"string","pattern":"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$"},"api_key_file":{"type":"string"},"state_dir":{"type":"string"},"region":{"type":"string","enum":["us","eu","ap-south"],"default":"us"},"max_instances":{"type":"integer","minimum":1,"maximum":200,"default":2},"default_disk_gb":{"type":"integer","minimum":2,"maximum":20,"default":20},"create_timeout":{"type":"string","default":"4m"},"poll_interval":{"type":"string","default":"1s"}}}`
+const JSONSchema = `{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["provider_id","api_key_file","state_dir"],"properties":{"provider_id":{"type":"string","pattern":"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$"},"api_key_file":{"type":"string"},"state_dir":{"type":"string"},"region":{"type":"string","enum":["us","eu","ap-south"],"default":"us"},"max_instances":{"type":"integer","minimum":1,"maximum":200,"default":2},"default_disk_gb":{"type":"integer","minimum":2,"maximum":20,"default":20},"create_timeout":{"type":"string","default":"4m"},"poll_interval":{"type":"string","default":"1s"},"tailscale":{"type":"object","additionalProperties":false,"properties":{"enabled":{"type":"boolean","default":false},"oauth_client_id":{"type":"string"},"oauth_secret_file":{"type":"string"},"tag":{"type":"string"},"gateway_dns":{"type":"string"},"private_aliases":{"type":"array","maxItems":16,"items":{"type":"string"}}}}}}`
 
 const ExtraSpecsJSONSchema = `{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"properties":{"disk_gb":{"type":"integer","minimum":2,"maximum":20},"extra_context":{"type":"object","additionalProperties":{"type":"string"}},"runner_install_template":{"type":"string"}}}`

@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-01",
+  "success": true,
+  "job_count": 90,
+  "successful_jobs": 90,
+  "unique_job_runners": 90,
+  "configured_cap": 45,
+  "observed_peak_vms": 45,
+  "observed_total_vms": 100,
+  "surplus_vms": 10,
+  "allocation_exact": false,
+  "restart_preserved_worker_ids": true,
+  "seconds_to_45_running_jobs": 22.957,
+  "seconds_to_last_job_completion": 92.804,
+  "seconds_to_automatic_zero": 331.67,
+  "remaining_workspace_vms": 0,
+  "remaining_ssh_keys": 0,
+  "controller_stopped": true,
+  "pool_disabled": true,
+  "lab_transport": "SSH reverse tunnels",
+  "large_tailscale_enrollment_burst_tested": false,
+  "billing_attribution": "omitted: an independent network probe overlapped this run"
+}

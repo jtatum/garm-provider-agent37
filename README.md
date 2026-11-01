@@ -2,7 +2,7 @@
 
 A GARM external provider for fresh Agent37 VM runners running Gitea Actions. GARM handles job demand and runner reconciliation; this provider creates a VM from a pinned workspace template, waits for Docker and the cached job image, launches GARM's runner installation script, and deletes the VM when GARM retires it. Each worker registers an ephemeral runner with capacity one and runs `daemon --once`.
 
-**Experimental: Gitea runners for trusted repositories.** GitHub runners are not implemented yet. A [20-job burst at ten concurrent VMs](docs/experiments/ten-concurrency.md) passed, including controller restart recovery and automatic scale-to-zero. A [37-check application workload](docs/experiments/trusted-workload.md) also passed all jobs and cleaned up automatically; its strict allocation check found one extra idle VM. Production deployment remains unvalidated. See [the project/test plan](docs/PLAN.md), [integration results](docs/RESULTS.md), and [operations](docs/OPERATIONS.md) for the tested scope and setup details.
+**Experimental: Gitea runners for trusted repositories.** GitHub runners are not implemented yet. A [20-job burst at ten concurrent VMs](docs/experiments/ten-concurrency.md) passed, including controller restart recovery and automatic scale-to-zero. A [37-check application workload](docs/experiments/trusted-workload.md) also passed all jobs and cleaned up automatically; its strict allocation check found one extra idle VM. A [90-job burst at 45 concurrent VMs](docs/experiments/fortyfive-concurrency.md) passed lifecycle checks with ten surplus idle workers reaped automatically. Production deployment remains unvalidated. See [the project/test plan](docs/PLAN.md), [integration results](docs/RESULTS.md), and [operations](docs/OPERATIONS.md) for the tested scope and setup details.
 
 ## Compatibility
 
@@ -21,7 +21,7 @@ make build
 make check
 ```
 
-The binary is `bin/garm-provider-agent37`. `make check` runs race-enabled Go tests, the Python bootstrap contract tests through Go, the lab helper tests, and `go vet`. GitHub Actions runs these checks and builds on Linux and macOS, checks Go formatting and Python syntax, and verifies a static Linux amd64 build. CI uses mock APIs and does not create cloud VMs or require credentials. There is no installer, release binary, or published container image in this repository.
+The binary is `bin/garm-provider-agent37`. `make check` runs race-enabled Go tests, the Python bootstrap contract tests through Go, the lab helper tests, and `go vet`. GitHub Actions runs these checks and builds on Linux and macOS, checks Go formatting and Python syntax, and verifies a static Linux amd64 build. CI uses mock APIs and does not create cloud VMs or require credentials. The [controller image recipe and smoke test](images/controller/README.md) package GARM, this provider, and its runner template. After merge, the manual publication workflow tags images by source commit.
 
 ## Image contract
 
@@ -30,6 +30,10 @@ Build an Agent37 workspace template from [`images/runner`](images/runner), then 
 The recipe contains Docker, Compose, Buildx, a checksum-verified Gitea runner, and an archived Alpine job image. It starts Docker with data under the persistent `/root` disk and writes `/root/garm-image/ready.json` only after its offline container test passes. The provider requires that marker, a working Docker daemon, and the runner executable before bootstrap. No runner identity, repository, or credentials are baked into the image.
 
 The cache archive is generated locally and excluded from Git. See [image preparation](docs/OPERATIONS.md#image-preparation) for its pinned source and checksum, and [the lab guide](lab/README.md) for the build helper and integration commands. This recipe deliberately retains the versions used in the feasibility tests; review and refresh them before a production rollout. Docker job-image preloading does not populate a separate Buildx builder's cache.
+
+## Private networking
+
+Optional [Tailscale worker networking](tailscale/README.md) enrolls each VM with a single-use ephemeral key and supplies private DNS to the VM, Docker, and BuildKit. It requires a dedicated controller OAuth client, a restricted tailnet gateway, and the network-enabled runner image. Networking remains disabled by default.
 
 ## Configure GARM
 

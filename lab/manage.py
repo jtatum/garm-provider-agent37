@@ -16,6 +16,7 @@ REPO = ROOT.parent
 GARM = 'http://127.0.0.1:19997/api/v1'
 GITEA = 'http://127.0.0.1:13000/api/v1'
 PROVIDER_ID = 'agent37-local-lab'
+MAX_CONCURRENCY = 45
 
 
 def save(name, value):
@@ -246,7 +247,7 @@ if __name__ == '__main__':
     p.add_argument('--key-file')
     p.add_argument('--image',default='garm-gitea-runner@1')
     p.add_argument('--job-image',default='alpine:3.22')
-    p.add_argument('--concurrency',type=int,choices=range(1,11),default=2)
+    p.add_argument('--concurrency',type=int,choices=range(1,MAX_CONCURRENCY+1),default=2)
     p.add_argument('--gitea-credentials', default=str(REPO.parent / 'garm-provider-boat/lab/.state/credentials.json'))
     args = p.parse_args()
     if args.operation == 'configure':

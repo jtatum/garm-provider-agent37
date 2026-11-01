@@ -1,0 +1,38 @@
+name: Publish controller
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: publish-controller
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Build controller
+        env:
+          IMAGE: ghcr.io/jtatum/garm-agent37-controller
+        run: |
+          docker buildx build --platform linux/amd64 --load \
+            --build-arg "PROVIDER_REVISION=$GITHUB_SHA" \
+            -f images/controller/Dockerfile -t "$IMAGE:$GITHUB_SHA" .
+      - name: Smoke test controller
+        run: python3 images/controller/smoke.py "ghcr.io/jtatum/garm-agent37-controller:$GITHUB_SHA"
+      - name: Publish immutable revision
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ghcr.io/jtatum/garm-agent37-controller
+        run: |
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          docker push "$IMAGE:$GITHUB_SHA"
+          docker buildx imagetools inspect "$IMAGE:$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
