@@ -2,13 +2,13 @@
 
 A GARM external provider for fresh Agent37 VM runners running Gitea Actions. GARM handles job demand and runner reconciliation; this provider creates a VM from a pinned workspace template, waits for Docker and the cached job image, launches GARM's runner installation script, and deletes the VM when GARM retires it. Each worker registers an ephemeral runner with capacity one and runs `daemon --once`.
 
-This is a development implementation for trusted repositories. It has not been deployed to production `host1`. See [the project/test plan](docs/PLAN.md), [integration results](docs/RESULTS.md), and [operations](docs/OPERATIONS.md) for acceptance evidence and remaining limits.
+**Experimental: Gitea runners for trusted repositories.** GitHub runners are not implemented yet. A [20-job burst at ten concurrent VMs](docs/experiments/ten-concurrency.md) passed, including controller restart recovery and automatic scale-to-zero. Real application builds and production deployment remain unvalidated. See [the project/test plan](docs/PLAN.md), [integration results](docs/RESULTS.md), and [operations](docs/OPERATIONS.md) for the tested scope and setup details.
 
 ## Compatibility
 
 - Provider interfaces: GARM `v0.1.0` and `v0.1.1`.
 - Provider dependency: `garm-provider-common v0.1.10-0.20261010221645-ec82f622d2d4`, pinned in `go.mod` to match the tested GARM API, including proxy settings.
-- GARM development baseline: commit `33ec0921418a470ca7e00dfb20ae111595da24e1`, plus a required compatibility fix described in the integration results. The initial live test found that this baseline can discard Gitea completed-job events when an ephemeral runner has already disappeared and its name is empty. Do not assume an unpatched release provides correct completion reconciliation; the exact baseline, patch and passing live evidence are recorded in [RESULTS.md](docs/RESULTS.md).
+- Tested GARM controller and Gitea setup: see [integration notes](docs/RESULTS.md#required-garm-compatibility-patch) for the exact revision and setup requirements.
 - Runner: Gitea runner `3.5.0`; guest OS/architecture: Linux amd64. The provider runs on Linux or macOS and uses local filesystem locks. The lab Gitea image is version `28.2.0`.
 
 ## Build and check
@@ -21,7 +21,7 @@ make build
 make check
 ```
 
-The binary is `bin/garm-provider-agent37`. `make check` runs race-enabled Go tests, the Python bootstrap contract tests through Go, and `go vet`. Python-dependent tests are skipped if Python 3 is unavailable; install it to run the complete checks. There is no installer, release binary, or published container image in this repository.
+The binary is `bin/garm-provider-agent37`. `make check` runs race-enabled Go tests, the Python bootstrap contract tests through Go, and `go vet`. Python-dependent tests are skipped if Python 3 is unavailable; install it to run the complete checks. GitHub Actions runs these checks and builds on Linux and macOS, checks Go formatting and Python syntax, and verifies a static Linux amd64 build. CI uses mock APIs and does not create cloud VMs or require credentials. There is no installer, release binary, or published container image in this repository.
 
 ## Image contract
 
@@ -76,7 +76,7 @@ garm-cli pool add \
   --enabled=false
 ```
 
-Enable the pool after verifying the image revision, network reachability, credentials, and GARM compatibility fix. Workflows select it with `runs-on: garm-agent37`. The default Alpine image is a small shell-test environment; typical JavaScript actions need an appropriate Node-capable job image. Set `extra_context.agent37_default_image` in the pool's extra specs when using another image.
+Enable the pool after following the [Gitea setup notes](docs/RESULTS.md#required-garm-compatibility-patch) and verifying the image revision, network reachability, and credentials. Workflows select it with `runs-on: garm-agent37`. The default Alpine image is a small shell-test environment; typical JavaScript actions need an appropriate Node-capable job image. Set `extra_context.agent37_default_image` in the pool's extra specs when using another image.
 
 `default` allocates **4 vCPU, 8 GB RAM, 20 GB disk** with the example configuration. `small` allocates **2 vCPU, 4 GB RAM**, with disk capped at 12 GB. Extra spec `disk_gb` can choose a smaller supported disk. The provider always creates `type: vm`, mounts the durable disk at `/root`, and disables auto-sleep.
 
@@ -86,4 +86,4 @@ The provider cap is separate from GARM pool limits, Agent37 account quotas, and 
 
 The local lab uses temporary authenticated reverse tunnels to reach Gitea and GARM on the laptop. Production workers require routable Gitea clone/API URLs and GARM metadata/callback URLs, including reachability from job containers. The provider does not establish that network path. Repository credentials, private lab state, and API keys must remain outside Git and image build contexts.
 
-Licensed under [Apache-2.0](LICENSE). The module path is the current local project identity; no upstream acceptance or published repository is implied.
+Licensed under [Apache-2.0](LICENSE). This is an independent provider project; upstream GARM acceptance is not implied.

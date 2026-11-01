@@ -30,11 +30,11 @@ A later [twenty-job, ten-VM acceptance run](experiments/ten-concurrency.md) pass
 - The provider's configured cap is an allocation limit, not a billing cap. Keep the account quota and wallet separate; never cancel a running job to satisfy a spending estimate.
 - Single GARM installation with shared provider state directory. Multiple controllers or independent state directories require their own distributed admission design.
 - The lab uses temporary authenticated SSH reverse forwards for laptop reachability. Production requires routable Gitea/GARM endpoints or a deliberate private-network solution.
-- Publication, upstream PRs, and production host1 rollout are separate from this implementation/test task.
+- Production host1 rollout is separate from the initial implementation and publication.
 
 ## Follow-on work
 
 - Select a representative host1 workflow and prepare its actual job images and BuildKit cache; measure queue-to-start and execution separately.
 - Establish production Gitea/GARM network routing and scoped credentials, then pilot one trusted repository at a small cap.
-- Package the provider and propose the separately tested GARM completion fix upstream when requested.
+- Publish release binaries after the real-workload pilot; track the [GARM completion fix](https://github.com/cloudbase/garm/pull/939) upstream.
 - Expand failure/reconciliation testing for missed or reordered webhooks, longer jobs and live capacity refusals before a wider rollout.
