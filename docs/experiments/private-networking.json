@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-01",
+  "success": true,
+  "template_revision": 1,
+  "runtime": "default",
+  "vcpus": 4,
+  "memory_gib": 8,
+  "disk_gib": 20,
+  "network_enrollment_seconds": 1.5528574160000002,
+  "logout_seconds": 0.613103417,
+  "checks": [
+    {
+      "name": "host_dns_https",
+      "ok": true,
+      "seconds": 0.468797103
+    },
+    {
+      "name": "metadata_gateway_boundaries",
+      "ok": true,
+      "seconds": 0.30317306799999955
+    },
+    {
+      "name": "default_docker_dns_https",
+      "ok": true,
+      "seconds": 0.5032900260000019
+    },
+    {
+      "name": "custom_docker_dns_https",
+      "ok": true,
+      "seconds": 0.517740731
+    },
+    {
+      "name": "buildkit_dns_https",
+      "ok": true,
+      "seconds": 3.3870050510000027
+    }
+  ],
+  "owned_vms_remaining": 0,
+  "tailnet_peer_removed": true,
+  "temporary_gateway_removed": true,
+  "production_runner_registration_tested": false
+}
