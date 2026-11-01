@@ -4,7 +4,9 @@
   "garm": {
     "base_commit": "33ec0921418a470ca7e00dfb20ae111595da24e1",
     "patch": "patches/garm-gitea-ephemeral-completion.patch",
-    "patch_sha256": "089a4e80fda3d8a99399eaae68118ef2989ab739aeba0a5a0777b4d129e01a34"
+    "patch_sha256": "089a4e80fda3d8a99399eaae68118ef2989ab739aeba0a5a0777b4d129e01a34",
+    "pull_request": "https://github.com/cloudbase/garm/pull/939",
+    "pull_request_head": "f076a3d3dd7e943ce517e442f61c6512ad0dfac0"
   },
   "common": "v0.1.10-0.20261010221645-ec82f622d2d4",
   "gitea": "28.2.0",

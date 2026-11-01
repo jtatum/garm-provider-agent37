@@ -19,7 +19,7 @@ Final verification found **zero workspace VMs, zero temporary SSH keys, zero Git
 
 The first run (Gitea run 9) exposed an upstream issue: Gitea's completed-job event retained the runner ID and start time but had a null runner name after ephemeral deregistration. GARM ignored that completion, leaving two workers active and the third job queued. Emergency cleanup removed those two VMs and the temporary key; that failed run is not counted as acceptance.
 
-The included [patch](../patches/garm-gitea-ephemeral-completion.patch) restores a missing completion name from the recorded assignment only when the entity, repository, job ID, run ID, runner ID, and nonzero start time match. Mismatches reject before persistence. Existing pool ownership checks remain in effect. GARM does not currently persist `run_attempt`; matching runner ID and execution start is the conservative check used here. No upstream PR has been submitted.
+The included [patch](../patches/garm-gitea-ephemeral-completion.patch) restores a missing completion name from the recorded assignment only when the entity, repository, job ID, run ID, runner ID, and nonzero start time match. Mismatches reject before persistence. Existing pool ownership checks remain in effect. GARM does not currently persist `run_attempt`; matching runner ID and execution start is the conservative check used here. The fix is submitted upstream as [this pull request](https://github.com/cloudbase/garm/pull/939); it is not yet merged.
 
 The tested controller is base commit `33ec0921418a470ca7e00dfb20ae111595da24e1` plus that patch. Patch SHA256: `089a4e80fda3d8a99399eaae68118ef2989ab739aeba0a5a0777b4d129e01a34`. It is already applied in this workspace's `../garm`. For a separate clean checkout at the exact baseline:
 
