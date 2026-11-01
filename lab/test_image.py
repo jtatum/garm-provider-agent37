@@ -27,6 +27,32 @@ class ResolveJobImageTests(unittest.TestCase):
         with patch('image.subprocess.check_output', return_value=json.dumps({'manifests': []})):
             with self.assertRaises(ValueError):image.resolve_job_image('registry.example/runner@sha256:' + 'a' * 64)
 
+class ImageVariantTests(unittest.TestCase):
+    def test_network_variant_is_explicit_and_recorded_in_build_manifest(self):
+        import tarfile
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import MagicMock
+        for enabled in [False, True]:
+            with self.subTest(enabled=enabled), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                context = root / 'images/runner'
+                context.mkdir(parents=True)
+                (root / 'state').mkdir()
+                for name in ['Dockerfile', 'entrypoint.py', 'image_cache.py', 'alpine.tar', '.dockerignore']:
+                    (context / name).write_text('ARG GARM_TAILSCALE_ENABLED=0\n' if name == 'Dockerfile' else 'test')
+                opener = MagicMock()
+                opener.open.return_value.__enter__.return_value.status = 200
+                replies = [{'id':'test-build','upload_url':'https://upload.invalid/context'},{}]
+                with patch.object(image.m,'REPO',root), patch.object(image.m,'STATE',root/'state'), \
+                     patch.object(image.m,'cloud',side_effect=replies), patch.object(image.m,'save') as save, \
+                     patch.object(image.urllib.request,'build_opener',return_value=opener), patch('builtins.print'):
+                    image.build('test-template',tailscale=enabled)
+                with tarfile.open(root/'state/image-context.tgz') as archive:
+                    dockerfile = archive.extractfile('Dockerfile').read().decode()
+                self.assertIn('ARG GARM_TAILSCALE_ENABLED=' + str(int(enabled)),dockerfile)
+                self.assertEqual(save.call_args.args[1]['tailscale_enabled'],enabled)
+
 
 if __name__ == '__main__':
     unittest.main()

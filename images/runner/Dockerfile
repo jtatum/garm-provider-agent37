@@ -1,6 +1,7 @@
 FROM ubuntu:24.04@sha256:78d4744ead1f5b19b04d0df558ab182a5300903900755e515b2ca4d10eb2044d
 
-ENV HOME=/root
+ARG GARM_TAILSCALE_ENABLED=0
+ENV HOME=/root GARM_TAILSCALE_ENABLED=${GARM_TAILSCALE_ENABLED}
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl git python3 xz-utils tini iptables iproute2 kmod \
     && install -m 0755 -d /etc/apt/keyrings \
@@ -22,6 +23,16 @@ RUN curl -fsSL https://gitea.com/gitea/runner/releases/download/v3.5.0/gitea-run
     && chmod 0755 /usr/local/bin/gitea-runner \
     && echo '16dc5c89ad5ac5496369642f01ed29c9bb130a2512e16a8cc3b400d9d0bfea73  /usr/local/bin/gitea-runner' | sha256sum -c - \
     && rm /tmp/runner.xz
+
+RUN if [ "$GARM_TAILSCALE_ENABLED" = "1" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends dnsmasq-base \
+      && curl -fsSL https://pkgs.tailscale.com/stable/tailscale_1.104.4_amd64.tgz -o /tmp/tailscale.tgz \
+      && echo '624ea093d47d62cf56f17b8332d74b8decda4a1faa610ebc60a1de334b2b3dc9  /tmp/tailscale.tgz' | sha256sum -c - \
+      && tar xzf /tmp/tailscale.tgz -C /tmp \
+      && install -m 0755 /tmp/tailscale_1.104.4_amd64/tailscale /tmp/tailscale_1.104.4_amd64/tailscaled /usr/local/bin/ \
+      && dpkg-query -W > /opt/garm/packages.txt \
+      && rm -rf /tmp/tailscale.tgz /tmp/tailscale_1.104.4_amd64 /var/lib/apt/lists/*; \
+    elif [ "$GARM_TAILSCALE_ENABLED" != "0" ]; then exit 1; fi
 
 COPY alpine.tar /opt/garm/cache/alpine.tar
 RUN echo '3c1b545ef346526439a40ab87bf252f21c0e5591e3d181d63bd0a6436a745bb3  /opt/garm/cache/alpine.tar' | sha256sum -c -

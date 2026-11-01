@@ -18,7 +18,11 @@ ready.unlink(missing_ok=True)
 fs = subprocess.check_output(['findmnt', '-n', '-o', 'FSTYPE', '-T', str(home)], text=True).strip()
 if fs in ('overlay', 'tmpfs'):
     raise RuntimeError('Docker data must live on the persistent disk')
-docker = subprocess.Popen(['dockerd', '--host=unix:///var/run/docker.sock', '--data-root=' + str(home / 'docker')])
+tailscale_enabled = os.environ.get('GARM_TAILSCALE_ENABLED', '0') == '1'
+docker_args = ['dockerd', '--host=unix:///var/run/docker.sock', '--data-root=' + str(home / 'docker')]
+if tailscale_enabled:
+    docker_args.extend(['--bip=172.17.0.1/16', '--dns=172.17.0.1'])
+docker = subprocess.Popen(docker_args)
 
 
 def shutdown(signum, frame):
@@ -55,7 +59,7 @@ try:
     ready.write_text(json.dumps({'entrypoint_started_at': started_at, 'ready_at': time.time(),
                                 'docker_ready_seconds': docker_ready - started,
                                 'total_bootstrap_seconds': time.monotonic() - started,
-                                'filesystem': fs, 'cached_image': image, 'cached_job_image': job_image,
+                                'filesystem': fs, 'tailscale_enabled': tailscale_enabled, 'cached_image': image, 'cached_job_image': job_image,
                                 'job_image_load_seconds': time.monotonic() - cache_started}))
     sys.exit(docker.wait())
 finally:

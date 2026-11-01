@@ -21,6 +21,7 @@ import (
 	"github.com/jtatum/garm-provider-agent37/bootstrap"
 	"github.com/jtatum/garm-provider-agent37/client"
 	"github.com/jtatum/garm-provider-agent37/config"
+	"github.com/jtatum/garm-provider-agent37/tailscale"
 )
 
 const (
@@ -28,6 +29,7 @@ const (
 	providerKey   = "garm-provider-id"
 	poolKey       = "garm-pool-id"
 	nameKey       = "garm-runner-name"
+	networkKey    = "garm-network"
 )
 
 var Version = "v0.1.0-dev"
@@ -43,12 +45,13 @@ type cloudAPI interface {
 }
 
 type Provider struct {
-	cfg          config.Config
-	controllerID string
-	poolID       string
-	statePath    string
-	api          cloudAPI
-	command      func(params.BootstrapInstance) (string, error)
+	cfg            config.Config
+	controllerID   string
+	poolID         string
+	statePath      string
+	api            cloudAPI
+	command        func(params.BootstrapInstance) (string, error)
+	mintNetworkKey func(context.Context) (string, error)
 }
 
 func New(configPath, controllerID, poolID string) (*Provider, error) {
@@ -73,7 +76,7 @@ func New(configPath, controllerID, poolID string) (*Provider, error) {
 func newProvider(cfg config.Config, controllerID, poolID string, api cloudAPI) *Provider {
 	hash := sha256.Sum256([]byte(controllerID + "\x00" + cfg.ProviderID))
 	return &Provider{cfg: cfg, controllerID: controllerID, poolID: poolID, api: api,
-		statePath: filepath.Join(cfg.StateDir, hex.EncodeToString(hash[:16])), command: bootstrap.Command}
+		statePath: filepath.Join(cfg.StateDir, hex.EncodeToString(hash[:16])), command: bootstrap.Command, mintNetworkKey: tailscale.New(cfg.Tailscale).Mint}
 }
 
 func (p *Provider) owns(instance client.Instance) bool {
@@ -100,9 +103,14 @@ func (p *Provider) request(bp params.BootstrapInstance) (client.CreateRequest, e
 		return client.CreateRequest{}, providerErrors.NewBadRequestError("request: %s", err)
 	}
 	hash := sha256.Sum256([]byte(p.controllerID + "\x00" + p.cfg.ProviderID + "\x00" + bp.Name))
+	metadata := map[string]string{controllerKey: p.controllerID, providerKey: p.cfg.ProviderID, poolKey: bp.PoolID, nameKey: bp.Name}
+	if p.cfg.Tailscale.Enabled {
+		network, _ := json.Marshal(p.cfg.Tailscale)
+		metadata[networkKey] = fmt.Sprintf("tailscale-%x", sha256.Sum256(network))
+	}
 	return client.CreateRequest{Name: "garm-" + hex.EncodeToString(hash[:12]), Template: bp.Image, Type: "vm",
 		Region: p.cfg.Region, Resources: resources, AutoSleep: false, MountPath: "/root",
-		Metadata: map[string]string{controllerKey: p.controllerID, providerKey: p.cfg.ProviderID, poolKey: bp.PoolID, nameKey: bp.Name}}, nil
+		Metadata: metadata}, nil
 }
 
 func (p *Provider) reserve(ctx context.Context, bp params.BootstrapInstance, req client.CreateRequest) (client.Instance, bool, error) {
@@ -143,7 +151,7 @@ func (p *Provider) reserve(ctx context.Context, bp params.BootstrapInstance, req
 	}
 	if len(matches) == 1 {
 		instance := matches[0]
-		if instance.Metadata[poolKey] != bp.PoolID || instance.Template != req.Template || instance.Resources != req.Resources || instance.Type != "vm" || instance.AutoSleep || instance.MountPath != "/root" {
+		if instance.Metadata[networkKey] != req.Metadata[networkKey] || instance.Metadata[poolKey] != bp.PoolID || instance.Template != req.Template || instance.Resources != req.Resources || instance.Type != "vm" || instance.AutoSleep || instance.MountPath != "/root" {
 			return client.Instance{}, false, fmt.Errorf("reserve: existing VM does not match the requested worker")
 		}
 		if exists && (old.Stage == "deleted" || old.Stage == "failed") {
@@ -225,7 +233,7 @@ func (p *Provider) CreateInstance(ctx context.Context, bp params.BootstrapInstan
 				return params.ProviderInstance{}, fmt.Errorf("CreateInstance: %w", err)
 			}
 		}
-		if !p.owns(instance) || instance.Metadata[nameKey] != bp.Name || instance.Metadata[poolKey] != bp.PoolID || instance.Template != req.Template || instance.Resources != req.Resources || instance.Type != "vm" || instance.AutoSleep || instance.MountPath != "/root" {
+		if !p.owns(instance) || instance.Metadata[nameKey] != bp.Name || instance.Metadata[networkKey] != req.Metadata[networkKey] || instance.Metadata[poolKey] != bp.PoolID || instance.Template != req.Template || instance.Resources != req.Resources || instance.Type != "vm" || instance.AutoSleep || instance.MountPath != "/root" {
 			return params.ProviderInstance{}, fmt.Errorf("CreateInstance: API returned an unexpected VM; creation remains quarantined")
 		}
 		if err := p.record(ctx, bp.Name, instance.ID, "allocated"); err != nil {
@@ -238,6 +246,11 @@ func (p *Provider) CreateInstance(ctx context.Context, bp params.BootstrapInstan
 			return params.ProviderInstance{}, fmt.Errorf("CreateInstance: %w", err)
 		}
 		if stage == "launched" || stage == "launching" || stage == "recovered" {
+			if p.cfg.Tailscale.Enabled {
+				if err := p.verifyNetwork(ctx, instance.ID); err != nil {
+					return params.ProviderInstance{}, fmt.Errorf("CreateInstance: network cannot be resumed: %w", err)
+				}
+			}
 			if err := p.verifySupervisor(ctx, instance.ID); err != nil {
 				return params.ProviderInstance{}, fmt.Errorf("CreateInstance: worker bootstrap was already attempted; refusing replay: %w", err)
 			}
@@ -249,6 +262,11 @@ func (p *Provider) CreateInstance(ctx context.Context, bp params.BootstrapInstan
 	}
 	if err := p.ready(ctx, instance.ID); err != nil {
 		return params.ProviderInstance{}, p.failCreate(instance, err)
+	}
+	if p.cfg.Tailscale.Enabled {
+		if err := p.setupNetwork(ctx, bp.Name, instance); err != nil {
+			return params.ProviderInstance{}, p.failCreate(instance, err)
+		}
 	}
 	if err := p.record(ctx, bp.Name, instance.ID, "launching"); err != nil {
 		return params.ProviderInstance{}, p.failCreate(instance, err)
@@ -384,6 +402,11 @@ func (p *Provider) DeleteInstance(ctx context.Context, identifier string) error 
 		return fmt.Errorf("DeleteInstance: %w", err)
 	}
 	for _, instance := range instances {
+		if instance.Metadata[networkKey] != "" {
+			logoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			_, _ = p.api.Exec(logoutCtx, instance.ID, tailscale.LogoutCommand, fmt.Sprintf("garm-logout-%d", time.Now().UnixNano()))
+			cancel()
+		}
 		if err := p.api.Delete(ctx, instance.ID); err != nil && !client.IsNotFound(err) {
 			return fmt.Errorf("DeleteInstance: delete owned VM: %w", err)
 		}

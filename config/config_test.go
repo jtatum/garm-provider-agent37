@@ -79,3 +79,26 @@ func TestLoadAndSecretRedaction(t *testing.T) {
 		t.Fatalf("TOML not safely rejected: %v", err)
 	}
 }
+
+func TestOptionalTailscaleConfiguration(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "provider.toml")
+	content := "provider_id = 'private'\napi_key_file = '/private/key'\nstate_dir = '" + directory + "'\n[tailscale]\nenabled = true\noauth_client_id = 'test-client'\noauth_secret_file = '/private/oauth'\ntag = 'tag:worker'\ngateway_dns = 'ci.example.ts.net'\nprivate_aliases = ['git.example']\n"
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Tailscale.Enabled || cfg.Tailscale.OAuthClientID != "test-client" || cfg.Tailscale.GatewayDNS != "ci.example.ts.net" {
+		t.Fatal("optional network settings not loaded")
+	}
+	if err := os.WriteFile(path, []byte(content+"oauth_secret = 'do-not-log-me'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = Load(path)
+	if err == nil || strings.Contains(err.Error(), "do-not-log-me") {
+		t.Fatal("inline unknown credential was not safely rejected")
+	}
+}
