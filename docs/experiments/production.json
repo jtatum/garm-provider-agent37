@@ -1,0 +1,246 @@
+{
+  "window": {
+    "start": "2026-11-02T02:52:00Z",
+    "end": "2026-11-03T10:50:00Z",
+    "seconds": 115080,
+    "step_seconds": 30
+  },
+  "workflow_runs": 111,
+  "skipped_labelled_jobs": 19,
+  "all_executed": {
+    "jobs": 318,
+    "success": 316,
+    "failure": 2,
+    "peak_executing": 19,
+    "runtime_seconds": {
+      "n": 318,
+      "sum": 4103.0,
+      "mean": 12.90251572327044,
+      "median": 6.0,
+      "p95": 34.0,
+      "max": 644.0
+    },
+    "creation_to_start_seconds": {
+      "n": 318,
+      "sum": 32463.0,
+      "mean": 102.08490566037736,
+      "median": 56.0,
+      "p95": 230.0,
+      "max": 317.0
+    }
+  },
+  "ordinary": {
+    "jobs": 315,
+    "success": 313,
+    "failure": 2,
+    "peak_executing": 19,
+    "runtime_seconds": {
+      "n": 315,
+      "sum": 4065.0,
+      "mean": 12.904761904761905,
+      "median": 6.0,
+      "p95": 34.0,
+      "max": 644.0
+    },
+    "creation_to_start_seconds": {
+      "n": 315,
+      "sum": 32389.0,
+      "mean": 102.82222222222222,
+      "median": 56.0,
+      "p95": 230.0,
+      "max": 317.0
+    }
+  },
+  "renovate_related": {
+    "jobs": 233,
+    "success": 232,
+    "failure": 1,
+    "peak_executing": 19,
+    "runtime_seconds": {
+      "n": 233,
+      "sum": 2389.0,
+      "mean": 10.253218884120171,
+      "median": 5.0,
+      "p95": 33.0,
+      "max": 128.0
+    },
+    "creation_to_start_seconds": {
+      "n": 233,
+      "sum": 29618.0,
+      "mean": 127.11587982832619,
+      "median": 122.0,
+      "p95": 233.0,
+      "max": 317.0
+    }
+  },
+  "metrics": {
+    "garm_runner_provision_duration_seconds": {
+      "observed_increase": 369.2241171298525,
+      "mean_seconds": 48.446594295486896,
+      "estimated_p95_seconds": 112.25958117957582
+    },
+    "garm_runner_ready_duration_seconds": {
+      "observed_increase": 368.2234823358266,
+      "mean_seconds": 45.173402417757245,
+      "estimated_p95_seconds": 106.20929458643033
+    },
+    "garm_runner_deletion_duration_seconds": {
+      "observed_increase": 369.2241309260716,
+      "mean_seconds": 10.979809870252339,
+      "estimated_p95_seconds": 27.596937123500417
+    },
+    "garm_job_queue_duration_seconds": {
+      "observed_increase": 310.18868865546585,
+      "mean_seconds": 98.07612699938721,
+      "estimated_p95_seconds": 275.73976374956817
+    },
+    "garm_job_execution_duration_seconds": {
+      "observed_increase": 316.19250845659667,
+      "mean_seconds": 12.813284620546666,
+      "estimated_p95_seconds": 45.7776356780249
+    }
+  },
+  "scrape_coverage": 1.0,
+  "sampled_peak_workers": 45,
+  "sampled_peak_running": 16,
+  "estimated_running_vm_hours": 3.658333333333333,
+  "tracked_record_hours": 9.825,
+  "bursts": [
+    {
+      "jobs": 174,
+      "success": 173,
+      "failure": 1,
+      "peak_executing": 19,
+      "runtime_seconds": {
+        "n": 174,
+        "sum": 1744.0,
+        "mean": 10.022988505747126,
+        "median": 5.0,
+        "p95": 32.0,
+        "max": 68.0
+      },
+      "creation_to_start_seconds": {
+        "n": 174,
+        "sum": 27192.0,
+        "mean": 156.27586206896552,
+        "median": 169.0,
+        "p95": 237.0,
+        "max": 317.0
+      },
+      "start": "2026-11-02T11:19:25Z",
+      "end": "2026-11-02T11:25:38Z",
+      "renovate_related": 174
+    },
+    {
+      "jobs": 96,
+      "success": 95,
+      "failure": 1,
+      "peak_executing": 13,
+      "runtime_seconds": {
+        "n": 96,
+        "sum": 1723.0,
+        "mean": 17.947916666666668,
+        "median": 8.0,
+        "p95": 34.0,
+        "max": 644.0
+      },
+      "creation_to_start_seconds": {
+        "n": 96,
+        "sum": 3129.0,
+        "mean": 32.59375,
+        "median": 31.0,
+        "p95": 55.0,
+        "max": 72.0
+      },
+      "start": "2026-11-02T19:25:03Z",
+      "end": "2026-11-02T19:42:29Z",
+      "renovate_related": 20
+    },
+    {
+      "jobs": 1,
+      "success": 1,
+      "failure": 0,
+      "peak_executing": 1,
+      "runtime_seconds": {
+        "n": 1,
+        "sum": 23.0,
+        "mean": 23.0,
+        "median": 23.0,
+        "p95": 23.0,
+        "max": 23.0
+      },
+      "creation_to_start_seconds": {
+        "n": 1,
+        "sum": 20.0,
+        "mean": 20.0,
+        "median": 20.0,
+        "p95": 20.0,
+        "max": 20.0
+      },
+      "start": "2026-11-02T19:50:07Z",
+      "end": "2026-11-02T19:50:50Z",
+      "renovate_related": 0
+    },
+    {
+      "jobs": 17,
+      "success": 17,
+      "failure": 0,
+      "peak_executing": 9,
+      "runtime_seconds": {
+        "n": 17,
+        "sum": 138.0,
+        "mean": 8.117647058823529,
+        "median": 5.0,
+        "p95": 36.0,
+        "max": 36.0
+      },
+      "creation_to_start_seconds": {
+        "n": 17,
+        "sum": 502.0,
+        "mean": 29.529411764705884,
+        "median": 31.0,
+        "p95": 39.0,
+        "max": 39.0
+      },
+      "start": "2026-11-02T21:36:54Z",
+      "end": "2026-11-02T21:38:09Z",
+      "renovate_related": 17
+    },
+    {
+      "jobs": 27,
+      "success": 27,
+      "failure": 0,
+      "peak_executing": 9,
+      "runtime_seconds": {
+        "n": 27,
+        "sum": 437.0,
+        "mean": 16.185185185185187,
+        "median": 7.0,
+        "p95": 42.0,
+        "max": 128.0
+      },
+      "creation_to_start_seconds": {
+        "n": 27,
+        "sum": 1546.0,
+        "mean": 57.25925925925926,
+        "median": 52.0,
+        "p95": 83.0,
+        "max": 148.0
+      },
+      "start": "2026-11-03T10:41:11Z",
+      "end": "2026-11-03T10:47:22Z",
+      "renovate_related": 22
+    }
+  ],
+  "methodology": {
+    "job_scope": "garm-agent37 labels; all run attempts; carry-forward and skipped records excluded",
+    "percentiles": "nearest rank",
+    "creation_to_start": "includes DAG dependency waiting",
+    "histograms": "Prometheus increase per series then aggregate; interpolated p95",
+    "hours": "sampled GARM record-hours, not billed VM-hours",
+    "failure_causes": [
+      "generated deployment/template mismatch",
+      "unclassified; original log unavailable; retry passed"
+    ]
+  }
+}

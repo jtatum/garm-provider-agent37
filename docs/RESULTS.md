@@ -1,8 +1,8 @@
 # Live acceptance results
 
-Verified on **2026-11-01** against the real Agent37 API, the real GARM external-provider protocol, and Docker Gitea's private `lab-admin/runner-proof` lab repository. This is a working development implementation for trusted jobs, not a production host1 deployment.
+Verified on **2026-11-01** against the real Agent37 API, the real GARM external-provider protocol, and Docker Gitea's private `lab-admin/runner-proof` lab repository. These initial lab results are preserved below. [Production acceptance and burst measurements](experiments/production.md) now cover the trusted private deployment activated on 2026-11-02, with [aggregate data](experiments/production.json).
 
-## Passed end to end
+## Initial lab: passed end to end
 
 | Case | Gitea run | Job outcomes | Fresh VMs / runner identities | Maximum observed VMs | Automatic scale to zero |
 | --- | --- | --- | --- | --- | --- |
@@ -13,7 +13,7 @@ Both runs began with no workers. The harness observed two running jobs and a thi
 
 The harness observed two running jobs after 6.94 seconds in the success case and 5.50 seconds in the failure case. Dispatch through verified automatic scale-to-zero took 29.64 and 34.78 seconds respectively. These are two small gated lab runs with polling and laptop reverse tunnels, **not** latency percentiles or representative host1 build benchmarks. The deliberate failure is an expected workflow conclusion, not a failed acceptance run.
 
-Final verification found **zero workspace VMs, zero temporary SSH keys, zero Gitea runner registrations, and zero GARM instance records**. The pool is disabled and the native GARM test process is stopped. Docker Gitea and its data volumes remain available at `http://127.0.0.1:13000`. The reusable workspace template is retained.
+Final verification of that initial lab found **zero workspace VMs, zero temporary SSH keys, zero Gitea runner registrations, and zero GARM instance records**. The pool is disabled and the native GARM test process is stopped. Docker Gitea and its data volumes remain available at `http://127.0.0.1:13000`. The reusable workspace template is retained.
 
 ## Required GARM compatibility patch
 
@@ -51,4 +51,4 @@ A subsequent [37-check trusted workload](experiments/trusted-workload.md) passed
 
 A [90-job, 45-worker burst](experiments/fortyfive-concurrency.md) passed after fixing a separate create/completion race. A [single-worker private-networking probe](experiments/private-networking.md) passed host, Docker, and BuildKit DNS/HTTPS checks.
 
-Still unvalidated: production workload behavior and BuildKit cache selection; production registration, callbacks, secrets and registry publication; sustained high-concurrency workloads and simultaneous Tailscale enrollment; account quota/funding exhaustion under live load; missed or reordered forge-event recovery; multiple controllers; untrusted-fork policy; production release/upgrade procedures. VM reuse, cooldown and spending enforcement are not implemented. Agent37 account automatic top-up settings were not changed. The configured VM cap is not a billing cap.
+The [production report](experiments/production.md) records private registration/callbacks, artifact/registry publication, simultaneous enrollment at 45 workers, and subsequent Renovate bursts. Still unvalidated: long-term workload reliability and BuildKit cache A/B selection; account quota/funding exhaustion under live load; missed or reordered forge-event recovery; multiple controllers; untrusted-fork policy; production release/upgrade procedures. VM reuse, cooldown and spending enforcement are not implemented. Agent37 account automatic top-up settings were not changed. The configured VM cap is not a billing cap.
