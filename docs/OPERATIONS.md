@@ -86,7 +86,7 @@ The [lab image helper](../lab/README.md#custom-image) uploads an explicit five-f
 
 Binaries and archives belong outside `/root`, which Agent37 mounts as the persistent disk. The image uses `/opt` and `/usr/local/bin`; Docker and its managed containerd store their runtime data under `/root/docker`. Never build a reusable template from a worker that has already registered or executed jobs.
 
-The recipe freezes the Ubuntu base digest, Docker-related package versions, and runner checksum. Other apt package versions resolve at build time and are recorded inside `/opt/garm/packages.txt`; the published image revision freezes the resulting filesystem. Prewarming job images and BuildKit build caches are separate tasks. The current Alpine cache is a feasibility fixture, not a validated cache set for production `host1`.
+The recipe freezes the Ubuntu base digest, Docker-related package versions, and runner checksum. Other apt package versions resolve at build time and are recorded inside `/opt/garm/packages.txt`; the published image revision freezes the resulting filesystem. Prewarming job images and BuildKit build caches are separate tasks. The supplied Alpine cache is a small acceptance-test fixture. Choose job images and measure startup costs for the workflows your pool will run.
 
 ## Network and rollout
 
@@ -94,4 +94,4 @@ For private endpoints, see the optional [Tailscale networking configuration](../
 
 Workers must reach GARM metadata/callback URLs and Gitea API/clone URLs. Job containers must reach the checkout URL and any services required by their workflows. Configure HTTPS and the intended CA/proxy settings for production. The temporary reverse tunnels used by the laptop lab are test infrastructure, not provider functionality.
 
-Private `lab/.state`, generated binaries, image archives, credentials and VM logs are excluded from Git. The checked-in lab code is specific to the isolated local Gitea fixture; see [results](RESULTS.md) before adapting it. Production `host1` deployment, workload/cache sizing, sustained high-concurrency builds, multi-controller operation, and budget enforcement remain separate acceptance work.
+Private `lab/.state`, generated binaries, image archives, credentials and VM logs are excluded from Git. The checked-in lab code is specific to the isolated local Gitea fixture; see [results](RESULTS.md) before adapting it. Validate endpoint reachability, registration/callbacks, artifacts and any registry publication before routing production jobs. Size capacity and caches from representative workloads. Multi-controller coordination and budget enforcement are not provided.

@@ -1,6 +1,6 @@
 # Local Gitea / GARM integration lab
 
-This lab runs the real GARM external-provider protocol, real Agent37 VMs, and a synthetic private Gitea repository. It does not deploy to host1. Each test VM hosts at most one ephemeral job and is then deleted; GARM may also create and retire an unused idle worker. Cloud creation spends account credit.
+This lab runs the real GARM external-provider protocol, real Agent37 VMs, and a synthetic private Gitea repository. Use a dedicated test repository and pool, separate from production workloads. Each test VM hosts at most one ephemeral job and is then deleted; GARM may also create and retire an unused idle worker. Cloud creation spends account credit.
 
 The current workspace reuses the Docker Gitea lab in the sibling `garm-provider-boat` repository. That name is historical; Boat is not involved in these tests. Gitea listens on `127.0.0.1:13000`, native GARM on `127.0.0.1:19997`. Keep `.state/` private: it contains credentials, tokens, database, and diagnostic logs. It is ignored by Git.
 

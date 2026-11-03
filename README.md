@@ -2,7 +2,7 @@
 
 A GARM external provider for fresh Agent37 VM runners running Gitea Actions. GARM handles job demand and runner reconciliation; this provider creates a VM from a pinned workspace template, waits for Docker and the cached job image, launches GARM's runner installation script, and deletes the VM when GARM retires it. Each worker registers an ephemeral runner with capacity one and runs `daemon --once`.
 
-**Experimental: Gitea runners for trusted repositories.** GitHub runners are not implemented yet. A [20-job burst at ten concurrent VMs](docs/experiments/ten-concurrency.md) passed, including controller restart recovery and automatic scale-to-zero. A [37-check application workload](docs/experiments/trusted-workload.md) also passed all jobs and cleaned up automatically; its strict allocation check found one extra idle VM. A [90-job burst at 45 concurrent VMs](docs/experiments/fortyfive-concurrency.md) passed lifecycle checks with ten surplus idle workers reaped automatically. Production deployment remains unvalidated. See [the project/test plan](docs/PLAN.md), [integration results](docs/RESULTS.md), and [operations](docs/OPERATIONS.md) for the tested scope and setup details.
+**Experimental: Gitea runners for trusted repositories.** GitHub runners are not implemented yet. See [operations](docs/OPERATIONS.md) for setup and recovery, [acceptance results](docs/RESULTS.md) for tested behavior and limitations, and [the project/test plan](docs/PLAN.md) for the roadmap.
 
 ## Compatibility
 
@@ -29,7 +29,7 @@ Build an Agent37 workspace template from [`images/runner`](images/runner), then 
 
 The recipe contains Docker, Compose, Buildx, a checksum-verified Gitea runner, and an archived Alpine job image. It starts Docker with data under the persistent `/root` disk and writes `/root/garm-image/ready.json` only after its offline container test passes. The provider requires that marker, a working Docker daemon, and the runner executable before bootstrap. No runner identity, repository, or credentials are baked into the image.
 
-The cache archive is generated locally and excluded from Git. See [image preparation](docs/OPERATIONS.md#image-preparation) for its pinned source and checksum, and [the lab guide](lab/README.md) for the build helper and integration commands. This recipe deliberately retains the versions used in the feasibility tests; review and refresh them before a production rollout. Docker job-image preloading does not populate a separate Buildx builder's cache.
+The cache archive is generated locally and excluded from Git. See [image preparation](docs/OPERATIONS.md#image-preparation) for its pinned source and checksum, and [the lab guide](lab/README.md) for the build helper and integration commands. The recipe retains the tested versions; review version pins when preparing each new template revision. Docker job-image preloading does not populate a separate Buildx builder's cache.
 
 ## Private networking
 
@@ -88,6 +88,6 @@ Enable the pool after following the [Gitea setup notes](docs/RESULTS.md#required
 
 The provider cap is separate from GARM pool limits, Agent37 account quotas, and the account wallet. It is not a spending limit. There is no warm-VM reuse, idle cooldown, automatic resume after interruption, or GitHub runner support in this first version. Stop is rejected; Start only verifies that the original worker supervisor remains alive. Completed, stopped, or interrupted workers must be deleted and replaced.
 
-The local lab uses temporary authenticated reverse tunnels to reach Gitea and GARM on the laptop. Production workers require routable Gitea clone/API URLs and GARM metadata/callback URLs, including reachability from job containers. The provider does not establish that network path. Repository credentials, private lab state, and API keys must remain outside Git and image build contexts.
+The local lab uses temporary authenticated reverse tunnels to reach Gitea and GARM on the laptop. Production workers require routable Gitea clone/API URLs and GARM metadata/callback URLs, including reachability from job containers. Configure the optional Tailscale integration above or supply another tested network path. Repository credentials, private lab state, and API keys must remain outside Git and image build contexts.
 
 Licensed under [Apache-2.0](LICENSE). This is an independent provider project; upstream GARM acceptance is not implied.

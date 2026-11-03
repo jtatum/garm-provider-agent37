@@ -12,7 +12,7 @@ docker buildx build --platform linux/amd64 --load \
 python3 images/controller/smoke.py garm-agent37-controller:local
 ```
 
-The Dockerfile-specific ignore file allows only provider source, the selected template, the lifecycle patches, license and recipe into the local build context. GARM is fetched independently by exact public commit. No private lab state, key, job image archive, host1 source or Docker credentials enter that context. Npm uses GARM's lockfile, Go uses the vendored GARM dependencies and the provider's module sums. Apt dependencies resolve at build time; the runtime package inventory is `/opt/garm/packages.txt`. Publish and deploy the resulting image by digest.
+The Dockerfile-specific ignore file allows only provider source, the selected template, the lifecycle patches, license and recipe into the local build context. GARM is fetched independently by exact public commit. No private lab state, key, job image archive, workload repository source or Docker credentials enter that context. Npm uses GARM's lockfile, Go uses the vendored GARM dependencies and the provider's module sums. Apt dependencies resolve at build time; the runtime package inventory is `/opt/garm/packages.txt`. Publish and deploy the resulting image by digest.
 
 The build runs compilers on the build host architecture and uses an explicit amd64 cross-libc toolchain for GARM's SQLite support. The resulting controller runs on amd64; the local smoke test can use Docker's amd64 emulation on an ARM Mac.
 
