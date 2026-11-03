@@ -9,7 +9,7 @@ Passed on 2026-11-01 using the real GARM/Agent37 lifecycle and local Docker Gite
 - Confirmed automatic scale-to-zero at **36.848 s**. The observed peak was exactly ten VMs and ten running jobs.
 - Wallet changed from **$9.979734** to **$9.968874**: an observed difference of **$0.010860**, approximately **1.1 cents**. No other workspace instances existed during the test. This is the wallet observation for this short run, not a general per-job cost prediction; billing settings were not changed.
 
-Each VM used the same `garm-gitea-runner@1` image, 4 vCPU, 8 GB RAM, and 20 GB disk. Work consisted of a private synthetic-repository clone, freshness canaries, and a deterministic release gate. This establishes lifecycle and queue behavior at ten-way concurrency; it does not measure ten simultaneous CPU-heavy host1 builds or sustained load.
+Each VM used the same `garm-gitea-runner@1` image, 4 vCPU, 8 GB RAM, and 20 GB disk. Work consisted of a private synthetic-repository clone, freshness canaries, and a deterministic release gate. This establishes lifecycle and queue behavior at ten-way concurrency; it does not measure ten simultaneous CPU-heavy application builds or sustained load.
 
 Afterward: zero Agent37 VMs, zero temporary SSH keys, zero Gitea registrations and zero GARM instance records. The pool is disabled, both caps are restored to two, and the native controller is stopped. Docker Gitea remains available with its data retained.
 

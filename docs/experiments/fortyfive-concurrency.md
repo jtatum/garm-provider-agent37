@@ -36,6 +36,6 @@ intervention. Earlier evidence is retained privately; results were not relabeled
 [Sanitized results](fortyfive-concurrency.json) record the final assertions.
 A separate, concurrent [single-worker Tailscale probe](private-networking.md)
 validated private networking. This burst used the existing SSH lab transport;
-45 simultaneous Tailscale enrollments and production host1 activation are still
-unvalidated. Wallet-based cost attribution is omitted because the two probes
+this experiment did not test simultaneous Tailscale enrollment or a production
+rollout. Wallet-based cost attribution is omitted because the two probes
 overlapped. Account billing settings were not changed.

@@ -1,6 +1,6 @@
 # Agent37 provider plan
 
-**Status: lab acceptance passed on 2026-11-01; trusted production activated on 2026-11-02.** See [results](RESULTS.md), including the required local GARM compatibility patch.
+**Status: external provider implemented for trusted Gitea jobs.** See [acceptance results](RESULTS.md) for tested versions, lifecycle behavior and GARM compatibility requirements.
 
 Build a GARM external provider for Linux amd64 Gitea runners on fresh Agent37 VMs. Keep the controller responsible for demand, registration metadata, webhooks, and runner reconciliation. Each VM serves at most one job and is then deleted. Trusted repositories are the initial deployment scope.
 
@@ -30,14 +30,15 @@ A later [twenty-job, ten-VM acceptance run](experiments/ten-concurrency.md) pass
 - The provider's configured cap is an allocation limit, not a billing cap. Keep the account quota and wallet separate; never cancel a running job to satisfy a spending estimate.
 - Single GARM installation with shared provider state directory. Multiple controllers or independent state directories require their own distributed admission design.
 - The lab uses temporary authenticated SSH reverse forwards for laptop reachability. Production requires routable Gitea/GARM endpoints or a deliberate private-network solution.
-- The trusted production rollout is now active; see [production scope and limitations](experiments/production.md).
+- Deployment networking, credentials, job images and capacity limits are operator configuration. Validate them against the workflows the pool will serve.
 
 ## Follow-on work
 
 - Completed: [37 selected trusted checks](experiments/trusted-workload.md), including application builds and artifact transfer, with a pinned cached Ubuntu job image.
 - Completed: [deterministic surplus-allocation reproduction](experiments/garm-surplus-reproduction.md). GARM explicitly anticipates unused workers under job reassignment; pool-cap enforcement and idle-only scale-down passed. Keep start overhead visible as an efficiency metric.
-- Completed: [first production burst measurements](experiments/production.md). Startup/queueing dominate the many short checks. Keep fresh VMs and the current template; cache A/B testing and a matched Kubernetes comparison remain future work.
+- Measure startup, execution and cleanup with representative workloads before choosing job-image preloads or external BuildKit caches. Cache selection and capacity sizing depend on the deployment.
 - Completed: optional Tailscale networking and a single-worker private DNS/HTTPS probe across host, Docker, and BuildKit.
-- Completed: published/pinned controller image, production credentials/private networking, registration/callback/artifact/registry canaries, 45 simultaneous jobs, and post-merge automatic cleanup.
-- Publish release binaries after the real-workload pilot; track the [GARM completion fix](https://github.com/cloudbase/garm/pull/939) upstream.
+- Completed: [controller packaging and smoke tests](../images/controller/README.md) and [optional private networking](../tailscale/README.md).
+- Publish versioned release binaries and document upgrades.
+- Prepare an upstream GARM provider submission after the prerequisite compatibility fixes are merged; track the [completion fix](https://github.com/cloudbase/garm/pull/939).
 - Expand failure/reconciliation testing for missed or reordered webhooks, longer jobs and live capacity refusals before a wider rollout.

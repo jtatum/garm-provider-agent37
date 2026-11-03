@@ -1,6 +1,6 @@
 # Live acceptance results
 
-Verified on **2026-11-01** against the real Agent37 API, the real GARM external-provider protocol, and Docker Gitea's private `lab-admin/runner-proof` lab repository. These initial lab results are preserved below. [Production acceptance and burst measurements](experiments/production.md) now cover the trusted private deployment activated on 2026-11-02, with [aggregate data](experiments/production.json).
+Verified on **2026-11-01** against the real Agent37 API, the real GARM external-provider protocol, and Docker Gitea's private `lab-admin/runner-proof` lab repository. These lab results describe provider behavior under the stated conditions; validate networking, job images and capacity for each deployment.
 
 ## Initial lab: passed end to end
 
@@ -11,9 +11,9 @@ Verified on **2026-11-01** against the real Agent37 API, the real GARM external-
 
 Both runs began with no workers. The harness observed two running jobs and a third queued, restarted GARM while those jobs were gated, and verified the same workers survived. After release, GARM deleted finished workers and provisioned the third fresh VM. Each job cloned the private fixture repository using its workflow token and checked workspace/container canaries. No manual runner registration or external scale-down step was used to satisfy the passing test assertions.
 
-The harness observed two running jobs after 6.94 seconds in the success case and 5.50 seconds in the failure case. Dispatch through verified automatic scale-to-zero took 29.64 and 34.78 seconds respectively. These are two small gated lab runs with polling and laptop reverse tunnels, **not** latency percentiles or representative host1 build benchmarks. The deliberate failure is an expected workflow conclusion, not a failed acceptance run.
+The harness observed two running jobs after 6.94 seconds in the success case and 5.50 seconds in the failure case. Dispatch through verified automatic scale-to-zero took 29.64 and 34.78 seconds respectively. These are two small gated lab runs with polling and laptop reverse tunnels, **not** latency percentiles or representative application build benchmarks. The deliberate failure is an expected workflow conclusion, not a failed acceptance run.
 
-Final verification of that initial lab found **zero workspace VMs, zero temporary SSH keys, zero Gitea runner registrations, and zero GARM instance records**. The pool is disabled and the native GARM test process is stopped. Docker Gitea and its data volumes remain available at `http://127.0.0.1:13000`. The reusable workspace template is retained.
+Final verification of that initial lab found **zero workspace VMs, zero temporary SSH keys, zero Gitea runner registrations, and zero GARM instance records**. The lab pool was then disabled and the native GARM test process stopped. The local Gitea data and reusable workspace template were retained for further tests.
 
 ## Required GARM compatibility patch
 
@@ -21,7 +21,7 @@ The first run (Gitea run 9) exposed an upstream issue: Gitea's completed-job eve
 
 The included [patch](../patches/garm-gitea-ephemeral-completion.patch) restores a missing completion name from the recorded assignment only when the entity, repository, job ID, run ID, runner ID, and nonzero start time match. Mismatches reject before persistence. Existing pool ownership checks remain in effect. GARM does not currently persist `run_attempt`; matching runner ID and execution start is the conservative check used here. The fix is submitted upstream as [this pull request](https://github.com/cloudbase/garm/pull/939); it is not yet merged.
 
-The tested controller is base commit `33ec0921418a470ca7e00dfb20ae111595da24e1` plus that patch. Patch SHA256: `089a4e80fda3d8a99399eaae68118ef2989ab739aeba0a5a0777b4d129e01a34`. It is already applied in this workspace's `../garm`. For a separate clean checkout at the exact baseline:
+The tested controller is base commit `33ec0921418a470ca7e00dfb20ae111595da24e1` plus that patch. Patch SHA256: `089a4e80fda3d8a99399eaae68118ef2989ab739aeba0a5a0777b4d129e01a34`. For a clean checkout at the exact baseline:
 
 ```sh
 git -C /path/to/garm apply --check /path/to/garm-provider-agent37/patches/garm-gitea-ephemeral-completion.patch
@@ -51,4 +51,4 @@ A subsequent [37-check trusted workload](experiments/trusted-workload.md) passed
 
 A [90-job, 45-worker burst](experiments/fortyfive-concurrency.md) passed after fixing a separate create/completion race. A [single-worker private-networking probe](experiments/private-networking.md) passed host, Docker, and BuildKit DNS/HTTPS checks.
 
-The [production report](experiments/production.md) records private registration/callbacks, artifact/registry publication, simultaneous enrollment at 45 workers, and subsequent Renovate bursts. Still unvalidated: long-term workload reliability and BuildKit cache A/B selection; account quota/funding exhaustion under live load; missed or reordered forge-event recovery; multiple controllers; untrusted-fork policy; production release/upgrade procedures. VM reuse, cooldown and spending enforcement are not implemented. Agent37 account automatic top-up settings were not changed. The configured VM cap is not a billing cap.
+The lab evidence does not establish long-term workload reliability or a generally optimal BuildKit cache strategy. Remaining validation includes account quota/funding exhaustion under live load; missed or reordered forge-event recovery; multiple controllers; untrusted-fork policy; production release/upgrade procedures. VM reuse, cooldown and spending enforcement are not implemented. Account billing settings are operator-managed. The configured VM cap is not a billing cap.
