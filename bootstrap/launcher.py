@@ -1,5 +1,6 @@
 import base64
 import fcntl
+import http.client
 import json
 import os
 from pathlib import Path
@@ -65,6 +66,8 @@ def request(opener, url, token, data=None):
         body = response.read(LIMIT + 1)
         if len(body) > LIMIT:
             raise RuntimeError('bootstrap response too large')
+        if response.length:
+            raise http.client.IncompleteRead(body, response.length)
         return body
 
 
@@ -149,7 +152,7 @@ def supervise(fd):
             except urllib.error.HTTPError as exc:
                 if exc.code not in (408, 425, 429, 500, 502, 503, 504):
                     raise RuntimeError('install template request rejected') from None
-            except (urllib.error.URLError, TimeoutError):
+            except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException):
                 pass
             if time.monotonic() >= deadline:
                 raise RuntimeError('install template unavailable')

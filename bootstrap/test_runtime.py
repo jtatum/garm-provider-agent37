@@ -3,9 +3,11 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -78,6 +80,47 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(json.loads((self.root / 'launch.json').read_text())['phase'], 'failed')
         self.assertFalse((self.root / 'bootstrap.json').exists())
         self.assertFalse((self.root / 'install-script').exists())
+
+
+    def supervise_with_metadata(self, responses):
+        listener = socket.create_server(('127.0.0.1', 0))
+        self.addCleanup(listener.close)
+        def serve():
+            for response in responses:
+                connection, _ = listener.accept()
+                connection.recv(65536)
+                connection.sendall(response)
+                connection.close()
+        server = threading.Thread(target=serve, daemon=True)
+        server.start()
+        url = 'http://127.0.0.1:%d' % listener.getsockname()[1]
+        (self.root / 'bootstrap.json').write_text(json.dumps(dict(self.cfg, metadata_url=url, callback_url=url)))
+        (self.root / 'launch.json').write_text(json.dumps({'name': 'one', 'boot_id': 'boot-one'}))
+        fd = os.open(self.root / 'launch.lock', os.O_CREAT | os.O_RDWR, 0o600)
+        installed = []
+        class Child:
+            def wait(self): return 0
+        def spawn(argv, **kwargs):
+            installed.append(Path(argv[0]).read_bytes())
+            return Child()
+        with patch.object(launcher, 'callback'), patch.object(launcher.time, 'sleep'), patch.object(launcher.subprocess, 'Popen', side_effect=spawn):
+            launcher.supervise(fd)
+        server.join(5)
+        return installed
+
+    def test_dropped_metadata_connection_is_retried(self):
+        script = b'#!/bin/sh\nexit 0\n'
+        installed = self.supervise_with_metadata([b'', b'HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n' % len(script) + script])
+        self.assertEqual(installed, [script])
+        self.assertEqual(json.loads((self.root / 'launch.json').read_text())['phase'], 'finished')
+
+    def test_truncated_install_template_is_never_executed(self):
+        script = b'#!/bin/sh\nrm -rf /root/garm/cache\n'
+        truncated = script[:len(script) - 7]
+        installed = self.supervise_with_metadata([
+            b'HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n' % len(script) + truncated,
+            b'HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n' % len(script) + script])
+        self.assertEqual(installed, [script])
 
 
 class TemplateTests(unittest.TestCase):
