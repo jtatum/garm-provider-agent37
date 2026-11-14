@@ -52,8 +52,10 @@ type Provider struct {
 	api            cloudAPI
 	command        func(params.BootstrapInstance) (string, error)
 	mintNetworkKey func(context.Context) (string, error)
-	// beforeDeleteJournal is a test seam between DeleteInstance's cloud calls and its journal update.
+	// Test seams: between DeleteInstance's cloud calls and its journal update, and after
+	// lockFile opens a lock file but before it tries to lock it.
 	beforeDeleteJournal func()
+	afterLockOpen       func(filename string)
 }
 
 func New(configPath, controllerID, poolID string) (*Provider, error) {

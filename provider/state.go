@@ -52,6 +52,9 @@ func (p *Provider) lockFile(ctx context.Context, filename string) (func(), error
 		if err != nil {
 			return nil, fmt.Errorf("lockFile: open lock: %w", err)
 		}
+		if p.afterLockOpen != nil {
+			p.afterLockOpen(filename)
+		}
 		if err := acquire(ctx, f); err != nil {
 			f.Close()
 			return nil, fmt.Errorf("lockFile: %w", err)

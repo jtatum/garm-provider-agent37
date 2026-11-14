@@ -119,21 +119,30 @@ func TestLockFollowsReplacedFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Each open by the waiter is reported here. The first report proves it holds a
+	// descriptor for the original inode before that inode is unlinked.
+	opened := make(chan struct{}, 2)
+	p.afterLockOpen = func(string) { opened <- struct{}{} }
 	acquired := make(chan func(), 1)
 	go func() {
 		unlock, err := p.lockFile(ctx, name)
 		if err != nil {
 			t.Error(err)
+			unlock = func() {}
 		}
 		acquired <- unlock
 	}()
-	time.Sleep(200 * time.Millisecond) // let the waiter open the original inode
+	<-opened
 	if err := os.Remove(filepath.Join(p.statePath, name)); err != nil {
 		t.Fatal(err)
 	}
 	first()
 	second := <-acquired
 	defer second()
+	p.afterLockOpen = nil
+	if len(opened) != 1 {
+		t.Fatalf("waiter opened the lock %d more time(s); want exactly one reopen after locking the unlinked inode", len(opened))
+	}
 	short, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
 	if unlock, err := p.lockFile(short, name); err == nil {
