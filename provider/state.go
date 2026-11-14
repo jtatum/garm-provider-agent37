@@ -10,8 +10,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
+)
+
+const (
+	runnerLockPrefix = "runner-"
+	// GARM retries a failed create under the same name within minutes and removes the
+	// instance after a few attempts; a day of retired names comfortably covers that.
+	retiredRetention = 24 * time.Hour
+	journalTimeout   = 30 * time.Second
 )
 
 type creation struct {
@@ -37,28 +46,91 @@ func (p *Provider) lockFile(ctx context.Context, filename string) (func(), error
 			return nil, fmt.Errorf("lockFile: state directories must be private directories (0700)")
 		}
 	}
-	f, err := os.OpenFile(filepath.Join(p.statePath, filename), os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0o600)
-	if err != nil {
-		return nil, fmt.Errorf("lockFile: open lock: %w", err)
-	}
+	path := filepath.Join(p.statePath, filename)
 	for {
-		if err := ctx.Err(); err != nil {
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0o600)
+		if err != nil {
+			return nil, fmt.Errorf("lockFile: open lock: %w", err)
+		}
+		if p.afterLockOpen != nil {
+			p.afterLockOpen(filename)
+		}
+		if err := acquire(ctx, f); err != nil {
 			f.Close()
 			return nil, fmt.Errorf("lockFile: %w", err)
+		}
+		if sameFile(f, path) {
+			return func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN); _ = f.Close() }, nil
+		}
+		// sweepRunnerLocks unlinked this file after it was opened. Holding a lock on the
+		// orphaned inode would not exclude a caller that opened the replacement path.
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		f.Close()
+	}
+}
+
+func acquire(ctx context.Context, f *os.File) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 		if err == nil {
-			return func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN); _ = f.Close() }, nil
+			return nil
 		}
 		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
-			f.Close()
-			return nil, fmt.Errorf("lockFile: acquire lock: %w", err)
+			return fmt.Errorf("acquire lock: %w", err)
 		}
 		if err := wait(ctx, 25*time.Millisecond); err != nil {
-			f.Close()
-			return nil, fmt.Errorf("lockFile: %w", err)
+			return err
 		}
 	}
+}
+
+func sameFile(f *os.File, path string) bool {
+	held, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	named, err := os.Lstat(path)
+	return err == nil && os.SameFile(held, named)
+}
+
+// sweepRunnerLocks removes per-runner lock files that no invocation holds. A runner lock is
+// held for the whole of CreateInstance, so an unheld file protects nothing; lockFile re-checks
+// the inode after locking, so a caller racing with removal moves to the replacement file.
+// The journal lock is never removed. Failures are ignored: leftover files are only clutter.
+func (p *Provider) sweepRunnerLocks() {
+	entries, err := os.ReadDir(p.statePath)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.Type().IsRegular() || !strings.HasPrefix(name, runnerLockPrefix) || !strings.HasSuffix(name, ".lock") {
+			continue
+		}
+		path := filepath.Join(p.statePath, name)
+		f, err := os.OpenFile(path, os.O_RDWR|syscall.O_NOFOLLOW, 0)
+		if err != nil {
+			continue
+		}
+		if syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) == nil {
+			if sameFile(f, path) {
+				_ = os.Remove(path)
+			}
+			_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		}
+		f.Close()
+	}
+}
+
+// journalContext bounds local journal bookkeeping separately from the caller's cloud budget.
+// A worker that booted slowly may have little create time left; brief lock contention must not
+// then discard it. Like failCreate cleanup, it does not inherit cancellation: once a cloud side
+// effect has happened, recording it is what keeps later reconciliation and deletion safe.
+func journalContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), journalTimeout)
 }
 
 func (p *Provider) loadState() (map[string]creation, error) {
@@ -76,7 +148,19 @@ func (p *Provider) loadState() (map[string]creation, error) {
 	return records, nil
 }
 
+// compact drops retired records once GARM can no longer be retrying their names. They only
+// block name reuse and restarts; keeping them forever made every journal operation slower.
+// Ambiguous (pending/unknown) and active records are never dropped.
+func compact(records map[string]creation, now time.Time) {
+	for name, record := range records {
+		if (record.Stage == "deleted" || record.Stage == "failed") && now.Sub(record.UpdatedAt) > retiredRetention {
+			delete(records, name)
+		}
+	}
+}
+
 func (p *Provider) saveState(records map[string]creation) error {
+	compact(records, time.Now().UTC())
 	data, err := json.Marshal(records)
 	if err != nil {
 		return fmt.Errorf("saveState: encode journal: %w", err)
@@ -112,6 +196,8 @@ func (p *Provider) saveState(records map[string]creation) error {
 }
 
 func (p *Provider) record(ctx context.Context, name, id, stage string) error {
+	ctx, cancel := journalContext(ctx)
+	defer cancel()
 	unlock, err := p.lock(ctx)
 	if err != nil {
 		return fmt.Errorf("record: %w", err)
@@ -151,6 +237,8 @@ func wait(ctx context.Context, duration time.Duration) error {
 }
 
 func (p *Provider) creationStage(ctx context.Context, name string) (string, error) {
+	ctx, cancel := journalContext(ctx)
+	defer cancel()
 	unlock, err := p.lock(ctx)
 	if err != nil {
 		return "", fmt.Errorf("creationStage: %w", err)

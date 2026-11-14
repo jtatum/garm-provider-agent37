@@ -52,6 +52,10 @@ type Provider struct {
 	api            cloudAPI
 	command        func(params.BootstrapInstance) (string, error)
 	mintNetworkKey func(context.Context) (string, error)
+	// Test seams: between DeleteInstance's cloud calls and its journal update, and after
+	// lockFile opens a lock file but before it tries to lock it.
+	beforeDeleteJournal func()
+	afterLockOpen       func(filename string)
 }
 
 func New(configPath, controllerID, poolID string) (*Provider, error) {
@@ -170,6 +174,9 @@ func (p *Provider) reserve(ctx context.Context, bp params.BootstrapInstance, req
 		}
 		return instance, false, nil
 	}
+	if exists && (old.Stage == "deleted" || old.Stage == "failed") {
+		return client.Instance{}, false, fmt.Errorf("reserve: runner name was retired by an earlier create attempt and cannot be reused")
+	}
 	if exists {
 		return client.Instance{}, false, fmt.Errorf("reserve: a creation intent already exists; reconcile or delete it before allocating another worker")
 	}
@@ -216,7 +223,7 @@ func (p *Provider) CreateInstance(ctx context.Context, bp params.BootstrapInstan
 		return params.ProviderInstance{}, fmt.Errorf("CreateInstance: bootstrap validation failed: %w", err)
 	}
 	runnerHash := sha256.Sum256([]byte(bp.Name))
-	unlock, err := p.lockFile(ctx, "runner-"+hex.EncodeToString(runnerHash[:16])+".lock")
+	unlock, err := p.lockFile(ctx, runnerLockPrefix+hex.EncodeToString(runnerHash[:16])+".lock")
 	if err != nil {
 		return params.ProviderInstance{}, fmt.Errorf("CreateInstance: %w", err)
 	}
@@ -388,19 +395,26 @@ func (p *Provider) matches(ctx context.Context, identifier string) ([]client.Ins
 }
 
 func (p *Provider) DeleteInstance(ctx context.Context, identifier string) error {
-	unlock, err := p.lock(ctx)
+	err := p.deleteInstance(ctx, identifier)
+	p.sweepRunnerLocks()
+	return err
+}
+
+// deleteInstance performs cloud calls without the journal lock, which every concurrent create
+// and delete shares; holding it across logout and DELETE serialized bursts behind slow API
+// calls. Decisions still use a consistent view: the journal is snapshotted before inventory is
+// read, and under the lock any relevant record that changed since then, other than one whose
+// VM this call deleted, aborts the update so GARM retries against fresh inventory.
+func (p *Provider) deleteInstance(ctx context.Context, identifier string) error {
+	snapshot, err := p.loadState()
 	if err != nil {
 		return fmt.Errorf("DeleteInstance: %w", err)
 	}
-	defer unlock()
 	instances, err := p.matches(ctx, identifier)
 	if err != nil {
 		return fmt.Errorf("DeleteInstance: %w", err)
 	}
-	records, err := p.loadState()
-	if err != nil {
-		return fmt.Errorf("DeleteInstance: %w", err)
-	}
+	removedIDs, removedNames := map[string]bool{}, map[string]bool{}
 	for _, instance := range instances {
 		if instance.Metadata[networkKey] != "" {
 			logoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -410,11 +424,37 @@ func (p *Provider) DeleteInstance(ctx context.Context, identifier string) error 
 		if err := p.api.Delete(ctx, instance.ID); err != nil && !client.IsNotFound(err) {
 			return fmt.Errorf("DeleteInstance: delete owned VM: %w", err)
 		}
-		for name, record := range records {
-			if record.InstanceID == instance.ID || name == instance.Metadata[nameKey] {
-				record.Stage, record.UpdatedAt = "deleted", time.Now().UTC()
-				records[name] = record
-			}
+		removedIDs[instance.ID], removedNames[instance.Metadata[nameKey]] = true, true
+	}
+	if p.beforeDeleteJournal != nil {
+		p.beforeDeleteJournal()
+	}
+	ctx, cancel := journalContext(ctx)
+	defer cancel()
+	unlock, err := p.lock(ctx)
+	if err != nil {
+		return fmt.Errorf("DeleteInstance: %w", err)
+	}
+	defer unlock()
+	records, err := p.loadState()
+	if err != nil {
+		return fmt.Errorf("DeleteInstance: %w", err)
+	}
+	for name, record := range records {
+		if name != identifier && record.InstanceID != identifier && !removedNames[name] {
+			continue
+		}
+		if record.InstanceID != "" && removedIDs[record.InstanceID] {
+			continue
+		}
+		if before, ok := snapshot[name]; !ok || before.Stage != record.Stage || before.InstanceID != record.InstanceID {
+			return fmt.Errorf("DeleteInstance: creation advanced during deletion; retry against current inventory")
+		}
+	}
+	for name, record := range records {
+		if removedIDs[record.InstanceID] || removedNames[name] {
+			record.Stage, record.UpdatedAt = "deleted", time.Now().UTC()
+			records[name] = record
 		}
 	}
 	for name, record := range records {
