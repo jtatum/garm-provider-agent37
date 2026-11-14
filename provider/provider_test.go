@@ -31,6 +31,8 @@ type fakeAPI struct {
 	createPersists bool
 	createStarted  chan struct{}
 	createContinue chan struct{}
+	deleteStarted  chan struct{}
+	deleteContinue chan struct{}
 	execFn         func(context.Context, string, string, string) (client.ExecResult, error)
 }
 
@@ -85,6 +87,14 @@ func (f *fakeAPI) Create(ctx context.Context, r client.CreateRequest) (client.In
 func (f *fakeAPI) Delete(ctx context.Context, id string) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if f.deleteStarted != nil {
+		close(f.deleteStarted)
+		select {
+		case <-f.deleteContinue:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
