@@ -41,6 +41,9 @@ class ImageVariantTests(unittest.TestCase):
                 (root / 'state').mkdir()
                 for name in ['Dockerfile', 'entrypoint.py', 'image_cache.py', 'alpine.tar', '.dockerignore']:
                     (context / name).write_text('ARG GARM_TAILSCALE_ENABLED=0\n' if name == 'Dockerfile' else 'test')
+                for name in ['bootstrap/launcher.py', 'tailscale/guest.py']:
+                    (root / name).parent.mkdir(parents=True, exist_ok=True)
+                    (root / name).write_text('runtime source')
                 opener = MagicMock()
                 opener.open.return_value.__enter__.return_value.status = 200
                 replies = [{'id':'test-build','upload_url':'https://upload.invalid/context'},{}]
@@ -50,6 +53,8 @@ class ImageVariantTests(unittest.TestCase):
                     image.build('test-template',tailscale=enabled)
                 with tarfile.open(root/'state/image-context.tgz') as archive:
                     dockerfile = archive.extractfile('Dockerfile').read().decode()
+                    self.assertEqual(set(archive.getnames()), {'Dockerfile', 'entrypoint.py', 'image_cache.py', 'alpine.tar', '.dockerignore', 'launcher.py', 'network.py'})
+                    self.assertEqual(archive.extractfile('launcher.py').read(), b'runtime source')
                 self.assertIn('ARG GARM_TAILSCALE_ENABLED=' + str(int(enabled)),dockerfile)
                 self.assertEqual(save.call_args.args[1]['tailscale_enabled'],enabled)
 

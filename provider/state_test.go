@@ -235,15 +235,16 @@ func TestJournalSurvivesExhaustedCreateBudget(t *testing.T) {
 	if err := os.MkdirAll(p.statePath, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := p.saveState(map[string]creation{"runner-a": {Name: "runner-a", PoolID: "pool-a", Stage: "allocated", InstanceID: "own0000001", UpdatedAt: time.Now().UTC()}}); err != nil {
+	if err := p.saveState(map[string]creation{"runner-a": {Name: "runner-a", PoolID: "pool-a", Stage: "pending", UpdatedAt: time.Now().UTC()}}); err != nil {
 		t.Fatal(err)
 	}
 	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
-	if err := p.record(expired, "runner-a", "own0000001", "launching"); err != nil {
+	if err := p.record(expired, "runner-a", "own0000001", "allocated"); err != nil {
 		t.Fatalf("bookkeeping failed after the cloud budget expired: %v", err)
 	}
-	if stage, err := p.creationStage(expired, "runner-a"); err != nil || stage != "launching" {
-		t.Fatalf("stage read failed: %q %v", stage, err)
+	records, err := p.loadState()
+	if err != nil || records["runner-a"].Stage != "allocated" || records["runner-a"].InstanceID != "own0000001" {
+		t.Fatalf("allocation was not persisted: %v", err)
 	}
 }

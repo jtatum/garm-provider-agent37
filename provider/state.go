@@ -235,22 +235,3 @@ func wait(ctx context.Context, duration time.Duration) error {
 		return nil
 	}
 }
-
-func (p *Provider) creationStage(ctx context.Context, name string) (string, error) {
-	ctx, cancel := journalContext(ctx)
-	defer cancel()
-	unlock, err := p.lock(ctx)
-	if err != nil {
-		return "", fmt.Errorf("creationStage: %w", err)
-	}
-	defer unlock()
-	records, err := p.loadState()
-	if err != nil {
-		return "", fmt.Errorf("creationStage: %w", err)
-	}
-	record, ok := records[name]
-	if !ok {
-		return "", fmt.Errorf("creationStage: missing creation intent")
-	}
-	return record.Stage, nil
-}

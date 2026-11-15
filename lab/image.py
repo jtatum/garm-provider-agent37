@@ -45,9 +45,12 @@ def build(name, job_image=None, tailscale=False):
         raise RuntimeError('Use a lowercase workspace template name')
     context = m.REPO / 'images/runner'
     names = ['Dockerfile', 'entrypoint.py', 'image_cache.py', 'alpine.tar', '.dockerignore']
-    if any(not (context / n).is_file() or (context / n).is_symlink() for n in names):
-        raise RuntimeError('Prepare the five regular image context files first')
-    files = {n:(context/n).read_bytes() for n in names}
+    sources = {n: context / n for n in names}
+    sources.update({'launcher.py': m.REPO / 'bootstrap/launcher.py',
+                    'network.py': m.REPO / 'tailscale/guest.py'})
+    if any(not path.is_file() or path.is_symlink() for path in sources.values()):
+        raise RuntimeError('Prepare the regular image context files first')
+    files = {name: path.read_bytes() for name, path in sources.items()}
     if tailscale:
         declaration = b'ARG GARM_TAILSCALE_ENABLED=0'
         if files['Dockerfile'].count(declaration) != 1:

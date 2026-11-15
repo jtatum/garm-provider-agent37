@@ -52,13 +52,48 @@ class LauncherTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             launcher.resume()
 
+    def test_image_and_network_failure_cannot_replay_startup(self):
+        events = []
+        def prepare():
+            self.assertTrue((self.root / 'launch.json').exists())
+            events.append('prepare')
+            raise RuntimeError('network unavailable')
+        with patch.object(launcher, 'callback') as callback, patch.object(launcher.subprocess, 'Popen') as spawn:
+            with self.assertRaises(RuntimeError):
+                launcher.launch(self.cfg, 'source', prepare)
+            self.assertEqual(callback.call_args.args[1], 'failed')
+            with self.assertRaises(RuntimeError):
+                launcher.launch(self.cfg, 'source', prepare)
+            self.assertEqual(events, ['prepare'])
+            spawn.assert_not_called()
+            self.assertEqual(json.loads((self.root / 'launch.json').read_text())['phase'], 'failed')
+
+    def test_environment_is_consumed_before_startup_children(self):
+        env = {'GARM_BOOTSTRAP_CONFIG': json.dumps(self.cfg),
+               'GARM_NETWORK_CONFIG': json.dumps({'auth_key': 'one-use-key'})}
+        with patch.dict(os.environ, env):
+            config, network = launcher.configuration()
+            self.assertEqual(config, self.cfg)
+            self.assertEqual(network, {'auth_key': 'one-use-key'})
+            self.assertNotIn('GARM_BOOTSTRAP_CONFIG', os.environ)
+            self.assertNotIn('GARM_NETWORK_CONFIG', os.environ)
+        for invalid in ('private-invalid-json', 'null', '[]'):
+            with patch.dict(os.environ, dict(env, GARM_BOOTSTRAP_CONFIG=invalid)):
+                with self.assertRaisesRegex(RuntimeError, '^invalid worker configuration$'):
+                    launcher.configuration()
+                self.assertNotIn('GARM_NETWORK_CONFIG', os.environ)
+
     def test_reboot_does_not_resume_previous_worker(self):
         (self.root / 'launch.json').write_text(json.dumps({'name': 'one', 'boot_id': 'old-boot'}))
         with self.assertRaises(RuntimeError):
             launcher.resume()
+        with patch.object(launcher.subprocess, 'Popen') as spawn:
+            with self.assertRaises(RuntimeError):
+                launcher.launch(self.cfg, 'source', lambda: self.fail('reboot repeated preparation'))
+            spawn.assert_not_called()
 
     def test_launch_failure_removes_credentials_and_keeps_claim(self):
-        with patch.object(launcher.subprocess, 'Popen', side_effect=OSError('failed')):
+        with patch.object(launcher, 'callback') as callback, patch.object(launcher.subprocess, 'Popen', side_effect=OSError('failed')):
             with self.assertRaises(OSError):
                 launcher.launch(self.cfg, 'source')
         self.assertFalse((self.root / 'bootstrap.json').exists())

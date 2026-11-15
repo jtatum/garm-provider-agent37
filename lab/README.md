@@ -28,9 +28,9 @@ Install the pinned Agent37 CLI in `lab/.state/agent37-cli/package` for the SSH p
 
 ## Custom image
 
-The workspace already has `garm-gitea-runner@1`. This is a workspace-owned template, not a public built-in template. A different workspace must build its own.
+Build a new workspace-owned template from this checkout. Older templates, including the original `garm-gitea-runner@1` lab image, do not consume the new bootstrap environment. Workspace templates are not public built-in templates.
 
-The image source is `images/runner/`. It boots Docker without systemd, imports a public Alpine job image, probes Docker, and writes `/root/garm-image/ready.json`. No registration or repository credentials are baked in. The provider waits for this readiness marker before bootstrap.
+The image source is `images/runner/`. It boots Docker without systemd, imports a public Alpine job image, probes Docker, and writes `/root/garm-image/ready.json`. No registration or repository credentials are baked in. Its entrypoint then configures optional networking and launches bootstrap from the creation-time environment. The provider does not wait for this readiness marker.
 
 To recreate the excluded image archive:
 
@@ -48,7 +48,7 @@ python3 lab/image.py build --name garm-gitea-runner
 python3 lab/image.py status
 ```
 
-`build` uploads only five allowlisted files, and does not pass the API key to the build. `status` saves the returned revision/digest privately. Inspect the successful revision and pin it in the pool; `lab/manage.py pool` currently selects `garm-gitea-runner@1`. Rebuilding creates a new revision, so deliberately update that pin. Ubuntu base, Docker components, and runner versions are pinned; other apt dependencies resolve at build time and are recorded in `/opt/garm/packages.txt`. A published template revision freezes the resulting image. Preloaded Docker job images do not populate a separate Buildx builder's cache.
+`build` uploads only seven allowlisted files (the five image context files plus `bootstrap/launcher.py` and `tailscale/guest.py`), and does not pass the API key to the build. `status` saves the returned revision/digest privately. Inspect the successful revision and pin it in the pool; pass that revision explicitly with `lab/manage.py pool --image NAME@REVISION`. Rebuilding creates a new revision, so deliberately update that pin. Ubuntu base, Docker components, and runner versions are pinned; other apt dependencies resolve at build time and are recorded in `/opt/garm/packages.txt`. A published template revision freezes the resulting image. Preloaded Docker job images do not populate a separate Buildx builder's cache.
 
 ## Cache a larger job image
 
@@ -60,7 +60,7 @@ python3 lab/image.py build --name garm-gitea-ubuntu \
 python3 lab/image.py status
 ```
 
-This option requires local Docker Buildx to inspect the public registry manifest. The cloud builder fetches the image by its platform digest with Skopeo; the upload remains the same five-file allowlist. No repository source or credentials enter the reusable image. The build verifies the archive configuration against the registry configuration digest. At boot, Docker loads the archive and verifies its platform, filesystem layers, and runtime configuration before the readiness marker is written. This works with both classic and containerd image stores, whose image IDs differ. Large archives increase readiness time and disk usage; measure both before setting bootstrap deadlines.
+This option requires local Docker Buildx to inspect the public registry manifest. The cloud builder fetches the image by its platform digest with Skopeo; the upload remains the same seven-file allowlist. No repository source or credentials enter the reusable image. The build verifies the archive configuration against the registry configuration digest. At boot, Docker loads the archive and verifies its platform, filesystem layers, and runtime configuration before the readiness marker is written. This works with both classic and containerd image stores, whose image IDs differ. Large archives increase readiness time and disk usage; measure both before setting bootstrap deadlines.
 
 The private `image-build.json` record contains `cached_job_image.reference`, the local cache tag used by the runner. Select that tag and the published template revision explicitly:
 
@@ -74,7 +74,7 @@ A local cache tag is verified against the pinned source configuration on each bo
 ## Run the proof
 
 ```sh
-python3 lab/manage.py pool
+python3 lab/manage.py pool --image NAME@REVISION
 python3 lab/integration.py
 python3 lab/integration.py --expect-failure
 ```

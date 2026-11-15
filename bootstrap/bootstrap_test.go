@@ -5,6 +5,7 @@ package bootstrap
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,7 +20,7 @@ func validParams() params.BootstrapInstance {
 	return params.BootstrapInstance{Name: "garm-test", InstanceToken: "test-instance-token", MetadataURL: "http://127.0.0.1/metadata", CallbackURL: "http://127.0.0.1/callback", OSType: params.Linux, OSArch: params.Amd64}
 }
 
-func TestCommandRejectsUnsupportedBootstrap(t *testing.T) {
+func TestConfigurationRejectsUnsupportedBootstrap(t *testing.T) {
 	cases := map[string]func(*params.BootstrapInstance){
 		"missing token":   func(p *params.BootstrapInstance) { p.InstanceToken = "" },
 		"windows":         func(p *params.BootstrapInstance) { p.OSType = params.Windows },
@@ -36,7 +37,7 @@ func TestCommandRejectsUnsupportedBootstrap(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			p := validParams()
 			alter(&p)
-			_, err := Command(p)
+			_, err := Configuration(p)
 			if err == nil {
 				t.Fatal("accepted invalid bootstrap")
 			}
@@ -47,21 +48,20 @@ func TestCommandRejectsUnsupportedBootstrap(t *testing.T) {
 	}
 }
 
-func TestCommandKeepsValuesOutOfShellSyntax(t *testing.T) {
+func TestConfigurationPreservesValuesAsData(t *testing.T) {
 	p := validParams()
 	p.Name = "name'; touch /tmp/should-not-exist; #"
 	p.InstanceToken = "secret\"$(false)'"
-	command, err := Command(p)
+	payload, err := Configuration(p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range []string{p.Name, p.InstanceToken, p.MetadataURL, p.CallbackURL} {
-		if strings.Contains(command, value) {
-			t.Fatalf("raw value appears in command: %q", value)
-		}
+	var cfg map[string]any
+	if err := json.Unmarshal([]byte(payload), &cfg); err != nil {
+		t.Fatal(err)
 	}
-	if len(command) >= 96*1024 {
-		t.Fatal("command exceeds argv envelope")
+	if cfg["name"] != p.Name || cfg["token"] != p.InstanceToken {
+		t.Fatal("configuration values changed")
 	}
 }
 
@@ -90,39 +90,5 @@ func TestRuntimeAndRenderedTemplate(t *testing.T) {
 	cmd := exec.Command(python, "test_runtime.py", path)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("runtime contract failed: %v\n%s", err, output)
-	}
-}
-
-func TestReadyCommandRequiresImageReadiness(t *testing.T) {
-	directory := t.TempDir()
-	marker := filepath.Join(directory, "ready.json")
-	runner := filepath.Join(directory, "gitea-runner")
-	docker := filepath.Join(directory, "docker")
-	for _, path := range []string{runner, docker} {
-		if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	command := strings.ReplaceAll(ReadyCommand, "/root/garm-image/ready.json", marker)
-	command = strings.ReplaceAll(command, "/usr/local/bin/gitea-runner", runner)
-	check := func() error {
-		cmd := exec.Command("sh", "-c", command)
-		cmd.Env = append(os.Environ(), "PATH="+directory+":"+os.Getenv("PATH"))
-		return cmd.Run()
-	}
-	if err := check(); err == nil {
-		t.Fatal("accepted Docker before image preparation completed")
-	}
-	if err := os.WriteFile(marker, []byte("{}"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := check(); err != nil {
-		t.Fatalf("prepared image was not ready: %v", err)
-	}
-	if err := os.WriteFile(docker, []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := check(); err == nil {
-		t.Fatal("accepted a stale marker with Docker unavailable")
 	}
 }

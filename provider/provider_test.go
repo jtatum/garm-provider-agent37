@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -12,7 +13,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	providerErrors "github.com/cloudbase/garm-provider-common/errors"
 	"github.com/cloudbase/garm-provider-common/params"
@@ -27,6 +27,7 @@ type fakeAPI struct {
 	creates        int
 	deletes        []string
 	execs          []string
+	requests       []client.CreateRequest
 	createError    error
 	createPersists bool
 	createStarted  chan struct{}
@@ -63,6 +64,7 @@ func (f *fakeAPI) Get(ctx context.Context, id string) (client.Instance, error) {
 func (f *fakeAPI) Create(ctx context.Context, r client.CreateRequest) (client.Instance, error) {
 	f.mu.Lock()
 	f.creates++
+	f.requests = append(f.requests, r)
 	id := fmt.Sprintf("test%06d", f.creates)
 	obj := client.Instance{ID: id, Name: r.Name, Template: r.Template, Type: r.Type, Region: r.Region, MountPath: r.MountPath, Status: "running", Resources: r.Resources, Metadata: r.Metadata, AutoSleep: r.AutoSleep}
 	if f.createPersists {
@@ -123,11 +125,10 @@ func testProvider(t *testing.T, api *fakeAPI) *Provider {
 		t.Fatal(err)
 	}
 	p := newProvider(cfg, "controller-a", "pool-a", api)
-	p.command = func(params.BootstrapInstance) (string, error) { return "bootstrap-command", nil }
 	return p
 }
 func testParams(name string) params.BootstrapInstance {
-	return params.BootstrapInstance{Name: name, PoolID: "pool-a", OSType: params.Linux, OSArch: params.Amd64, Image: "garm-runner@2", Flavor: "default"}
+	return params.BootstrapInstance{Name: name, PoolID: "pool-a", InstanceToken: "private-token", MetadataURL: "http://metadata.invalid", CallbackURL: "http://callback.invalid", OSType: params.Linux, OSArch: params.Amd64, Image: "garm-runner@2", Flavor: "default"}
 }
 func owned(id, name, pool, controller, provider string) client.Instance {
 	return client.Instance{ID: id, Name: "cloud-" + id, Status: "running", Type: "vm", Template: "garm-runner@2", MountPath: "/root", Resources: client.Resources{CPU: 4, Memory: 8, Disk: 20}, Metadata: map[string]string{controllerKey: controller, providerKey: provider, poolKey: pool, nameKey: name}}
@@ -253,7 +254,6 @@ func TestConcurrentReservationsEnforceCap(t *testing.T) {
 	p := testProvider(t, api)
 	p.cfg.MaxInstances = 1
 	other := newProvider(p.cfg, p.controllerID, p.poolID, api)
-	other.command = p.command
 	done := make(chan error, 1)
 	go func() { _, err := p.CreateInstance(context.Background(), testParams("runner-a")); done <- err }()
 	<-api.createStarted
@@ -270,45 +270,35 @@ func TestConcurrentReservationsEnforceCap(t *testing.T) {
 	}
 }
 
-func TestBootstrapFailureDeletesOwnedVMAndRedactsOutput(t *testing.T) {
+func TestCreateReturnsBeforeGuestIsReachable(t *testing.T) {
 	api := newFake()
-	api.execFn = func(_ context.Context, _, cmd, _ string) (client.ExecResult, error) {
-		if cmd == "bootstrap-command" {
-			return client.ExecResult{ExitCode: 7, Stdout: "SECRET", Stderr: "SECRET"}, nil
-		}
+	api.execFn = func(context.Context, string, string, string) (client.ExecResult, error) {
+		t.Fatal("creation must not wait for or execute guest bootstrap")
 		return client.ExecResult{}, nil
 	}
 	p := testProvider(t, api)
-	_, err := p.CreateInstance(context.Background(), testParams("runner-a"))
-	if err == nil || strings.Contains(err.Error(), "SECRET") {
-		t.Fatalf("bad bootstrap error: %v", err)
+	bp := testParams("runner-a")
+	instance, err := p.CreateInstance(context.Background(), bp)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(api.instances) != 0 || len(api.deletes) != 1 {
-		t.Fatal("failed VM leaked")
+	var cfg map[string]any
+	if err := json.Unmarshal([]byte(api.requests[0].Env[bootstrap.EnvironmentKey]), &cfg); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestCanceledReadinessDeletesOwnedVM(t *testing.T) {
-	api := newFake()
-	entered := make(chan struct{})
-	api.execFn = func(ctx context.Context, _, _, _ string) (client.ExecResult, error) {
-		close(entered)
-		<-ctx.Done()
-		return client.ExecResult{}, ctx.Err()
+	if cfg["token"] != bp.InstanceToken || cfg["name"] != bp.Name || cfg["metadata_url"] != bp.MetadataURL {
+		t.Fatal("bootstrap configuration was not handed to the VM")
 	}
-	p := testProvider(t, api)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { _, err := p.CreateInstance(ctx, testParams("runner-a")); done <- err }()
-	<-entered
-	cancel()
-	err := <-done
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("cancellation lost: %v", err)
+	records, err := p.loadState()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(api.instances) != 0 || len(api.deletes) != 1 {
-		t.Fatal("canceled VM leaked")
+	if records[bp.Name].InstanceID != instance.ProviderID || records[bp.Name].Stage != "allocated" {
+		t.Fatal("VM identity was not durably recorded before return")
+	}
+	data, _ := json.Marshal(records)
+	if strings.Contains(string(data), bp.InstanceToken) {
+		t.Fatal("bootstrap token entered journal")
 	}
 }
 
@@ -448,33 +438,9 @@ func TestDeletedIntentCannotBeResurrected(t *testing.T) {
 	}
 }
 
-func TestReadinessRetriesTransientFailure(t *testing.T) {
+func TestRetryWithRefreshedTokenAdoptsExistingVM(t *testing.T) {
 	api := newFake()
 	p := testProvider(t, api)
-	attempt := 0
-	api.execFn = func(_ context.Context, _, command, _ string) (client.ExecResult, error) {
-		if command == bootstrap.ReadyCommand {
-			attempt++
-			if attempt == 1 {
-				return client.ExecResult{}, &client.APIError{HTTPStatus: 409, Code: "try_again"}
-			}
-		}
-		return client.ExecResult{}, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	if _, err := p.CreateInstance(ctx, testParams("runner-a")); err != nil {
-		t.Fatal(err)
-	}
-	if attempt != 2 {
-		t.Fatalf("readiness attempts=%d", attempt)
-	}
-}
-
-func TestRetryWithRefreshedTokenAdoptsLiveSupervisor(t *testing.T) {
-	api := newFake()
-	p := testProvider(t, api)
-	p.command = func(bp params.BootstrapInstance) (string, error) { return "bootstrap:" + bp.InstanceToken, nil }
 	bp := testParams("runner-a")
 	bp.InstanceToken = "first-token"
 	first, err := p.CreateInstance(context.Background(), bp)
@@ -489,67 +455,50 @@ func TestRetryWithRefreshedTokenAdoptsLiveSupervisor(t *testing.T) {
 	if first.ProviderID != second.ProviderID || api.creates != 1 || len(api.deletes) != 0 {
 		t.Fatal("retry replaced healthy VM")
 	}
-	boots := 0
-	resumes := 0
-	for _, command := range api.execs {
-		if strings.HasPrefix(command, "bootstrap:") {
-			boots++
-			if command != "bootstrap:first-token" {
-				t.Fatal("bootstrap replayed refreshed token")
-			}
-		}
-		if command == bootstrap.ResumeCommand {
-			resumes++
-		}
+	var cfg map[string]any
+	if err := json.Unmarshal([]byte(api.requests[0].Env[bootstrap.EnvironmentKey]), &cfg); err != nil {
+		t.Fatal(err)
 	}
-	if boots != 1 || resumes != 1 {
-		t.Fatalf("bootstrap=%d resume=%d", boots, resumes)
+	if cfg["token"] != "first-token" || len(api.execs) != 0 {
+		t.Fatal("retry replayed or changed guest bootstrap")
 	}
 }
 
-func TestConcurrentDuplicateCreateOnlyBootstrapsOnce(t *testing.T) {
+func TestConcurrentDuplicateCreateOnlyAllocatesOnce(t *testing.T) {
 	api := newFake()
+	api.createStarted = make(chan struct{})
+	api.createContinue = make(chan struct{})
 	p := testProvider(t, api)
 	other := newProvider(p.cfg, p.controllerID, p.poolID, api)
-	other.command = p.command
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	var once sync.Once
-	api.execFn = func(ctx context.Context, _, command, _ string) (client.ExecResult, error) {
-		if command == "bootstrap-command" {
-			once.Do(func() { close(entered) })
-			select {
-			case <-release:
-			case <-ctx.Done():
-				return client.ExecResult{}, ctx.Err()
-			}
-		}
-		return client.ExecResult{}, nil
-	}
 	done := make(chan error, 2)
 	go func() { _, err := p.CreateInstance(context.Background(), testParams("runner-a")); done <- err }()
-	<-entered
-	called := make(chan struct{})
-	go func() {
-		close(called)
-		_, err := other.CreateInstance(context.Background(), testParams("runner-a"))
-		done <- err
-	}()
-	<-called
-	close(release)
+	<-api.createStarted
+	go func() { _, err := other.CreateInstance(context.Background(), testParams("runner-a")); done <- err }()
+	close(api.createContinue)
 	for range 2 {
 		if err := <-done; err != nil {
 			t.Fatal(err)
 		}
 	}
-	boots := 0
-	for _, cmd := range api.execs {
-		if cmd == "bootstrap-command" {
-			boots++
-		}
+	if api.creates != 1 || len(api.execs) != 0 || len(api.deletes) != 0 {
+		t.Fatal("concurrent retry duplicated or replayed bootstrap")
 	}
-	if api.creates != 1 || boots != 1 || len(api.deletes) != 0 {
-		t.Fatalf("creates=%d bootstraps=%d deletes=%v", api.creates, boots, api.deletes)
+}
+
+func TestRecoveryRequiresEntrypointContract(t *testing.T) {
+	api := newFake()
+	p := testProvider(t, api)
+	bp := testParams("runner-a")
+	first, err := p.CreateInstance(context.Background(), bp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(api.instances[first.ProviderID].Metadata, bootstrapKey)
+	if _, err := p.CreateInstance(context.Background(), bp); err == nil {
+		t.Fatal("legacy VM adopted without entrypoint bootstrap")
+	}
+	if api.creates != 1 || len(api.execs) != 0 {
+		t.Fatal("legacy recovery attempted bootstrap")
 	}
 }
 

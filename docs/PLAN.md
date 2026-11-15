@@ -7,8 +7,8 @@ Build a GARM external provider for Linux amd64 Gitea runners on fresh Agent37 VM
 ## Implementation
 
 - API client: separate control/exec authentication, bounded requests, sanitized errors, no blind create retries.
-- Provider: stable controller/provider/pool ownership metadata, name-based recovery, private durable creation journal, cross-process capacity lock, create/readiness/bootstrap/delete, scoped inventory and cleanup.
-- Bootstrap: authenticated GARM install-template download, non-systemd supervisor, ephemeral registration, capacity one, per-job exit, callbacks, and no re-registration after completion or ambiguous interruption.
+- Provider: stable controller/provider/pool ownership metadata, name-based recovery, private durable creation journal, cross-process capacity lock, creation-time bootstrap handoff and deletion, scoped inventory and cleanup.
+- Bootstrap: image entrypoint owns readiness and optional networking; authenticated GARM install-template download, non-systemd supervisor, ephemeral registration, capacity one, per-job exit, callbacks, and no re-registration after completion or ambiguous interruption.
 - Image: preserve the tested clean template recipe and immutable revision. No registration or repository secrets in image builds.
 - Packaging: configuration examples, reproducible build commands, unit tests, lab scripts, operational recovery and cleanup instructions.
 
@@ -42,3 +42,13 @@ A later [twenty-job, ten-VM acceptance run](experiments/ten-concurrency.md) pass
 - Publish versioned release binaries and document upgrades.
 - Prepare an upstream GARM provider submission after the prerequisite compatibility fixes are merged; track the [completion fix](https://github.com/cloudbase/garm/pull/939).
 - Expand failure/reconciliation testing for missed or reordered webhooks, longer jobs and live capacity refusals before a wider rollout.
+
+## Entrypoint bootstrap acceptance
+
+The provider now returns after compute creation and journal persistence. Before rolling out this version:
+
+- Build and pin a new runner image; old revisions do not consume the creation environment.
+- Run success and intentional-failure jobs with controller restart and scale-to-zero checks.
+- Run short-job bursts against GARM without the creation/completion race patch, keeping the separate Gitea completion-name compatibility fix.
+- Exercise the optional Tailscale path and confirm failed bootstrap is eventually deleted.
+- Record the exact source revisions and observed lifecycle ordering; earlier acceptance results describe the previous synchronous bootstrap implementation.

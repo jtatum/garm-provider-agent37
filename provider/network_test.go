@@ -26,31 +26,21 @@ func networkProvider(t *testing.T, api *fakeAPI) (*Provider, *int) {
 	return p, mints
 }
 
-func TestNetworkPrecedesBootstrapAndIsNotReenrolled(t *testing.T) {
+func TestNetworkConfigurationIsSentOnceAndNotJournaled(t *testing.T) {
 	api := newFake()
 	p, mints := networkProvider(t, api)
-	events := []string{}
-	api.execFn = func(ctx context.Context, id, command, name string) (client.ExecResult, error) {
-		if strings.HasPrefix(name, "garm-network-") && command != tailscale.VerifyCommand {
-			stage, err := p.creationStage(ctx, "runner-network")
-			if err != nil || stage != "networking" {
-				t.Error("network intent not durable before enrollment")
-			}
-			events = append(events, "network")
-		}
-		if command == "bootstrap-command" {
-			events = append(events, "bootstrap")
-		}
-		return client.ExecResult{}, nil
-	}
 	bp := testParams("runner-network")
 	for range 2 {
 		if _, err := p.CreateInstance(context.Background(), bp); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if *mints != 1 || strings.Join(events, ",") != "network,bootstrap" {
-		t.Fatalf("replayed enrollment or wrong order: %v", events)
+	if *mints != 1 || api.creates != 1 || len(api.execs) != 0 {
+		t.Fatal("network enrollment replayed")
+	}
+	payload := api.requests[0].Env[tailscale.EnvironmentKey]
+	if !strings.Contains(payload, "tskey-auth-worker-secret") || strings.Contains(payload, "controller-secret") || strings.Contains(payload, "controller-client") {
+		t.Fatal("incorrect guest credential scope")
 	}
 	data, err := os.ReadFile(filepath.Join(p.statePath, "creations.json"))
 	if err != nil {
@@ -60,6 +50,23 @@ func TestNetworkPrecedesBootstrapAndIsNotReenrolled(t *testing.T) {
 		if strings.Contains(string(data), secret) {
 			t.Fatal("credential leaked to creation journal")
 		}
+	}
+}
+
+func TestNetworkKeyFailureReleasesCapacityWithoutCreatingVM(t *testing.T) {
+	api := newFake()
+	p, _ := networkProvider(t, api)
+	p.cfg.MaxInstances = 1
+	p.mintNetworkKey = func(context.Context) (string, error) { return "", errors.New("mint failed") }
+	if _, err := p.CreateInstance(context.Background(), testParams("failed-network")); err == nil {
+		t.Fatal("key failure ignored")
+	}
+	if api.creates != 0 {
+		t.Fatal("VM created without network key")
+	}
+	p.mintNetworkKey = func(context.Context) (string, error) { return "tskey-auth-worker-secret", nil }
+	if _, err := p.CreateInstance(context.Background(), testParams("next-worker")); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -82,48 +89,14 @@ func seedNetworkStage(t *testing.T, p *Provider, api *fakeAPI, bp params.Bootstr
 	return instance
 }
 
-func TestNetworkRecoveryVerifiesWithoutMinting(t *testing.T) {
-	for _, stage := range []string{"networking", "networked"} {
-		for _, healthy := range []bool{true, false} {
-			t.Run(stage+map[bool]string{true: "-healthy", false: "-failed"}[healthy], func(t *testing.T) {
-				api := newFake()
-				p, mints := networkProvider(t, api)
-				bp := testParams("recovery")
-				seedNetworkStage(t, p, api, bp, stage)
-				checks := 0
-				bootstraps := 0
-				api.execFn = func(ctx context.Context, id, command, name string) (client.ExecResult, error) {
-					if command == tailscale.VerifyCommand {
-						checks++
-						if !healthy {
-							return client.ExecResult{ExitCode: 1}, nil
-						}
-					}
-					if command == "bootstrap-command" {
-						bootstraps++
-					}
-					return client.ExecResult{}, nil
-				}
-				_, err := p.CreateInstance(context.Background(), bp)
-				if (err == nil) != healthy || *mints != 0 || checks != 1 {
-					t.Fatalf("unsafe network recovery: %v", err)
-				}
-				if healthy && bootstraps != 1 {
-					t.Fatal("healthy network did not finish bootstrap")
-				}
-				if !healthy && (bootstraps != 0 || len(api.deletes) != 1) {
-					t.Fatal("failed enrollment was not deleted before bootstrap")
-				}
-			})
-		}
-	}
-}
-
-func TestNetworkFailureAndLogoutErrorsStillDeleteVM(t *testing.T) {
+func TestLogoutErrorsStillDeleteVM(t *testing.T) {
 	api := newFake()
-	p, mints := networkProvider(t, api)
+	p, _ := networkProvider(t, api)
+	instance, err := p.CreateInstance(context.Background(), testParams("runner-network"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	logout := false
-	bootstrapped := false
 	api.execFn = func(ctx context.Context, id, command, name string) (client.ExecResult, error) {
 		if command == tailscale.LogoutCommand {
 			logout = true
@@ -133,20 +106,13 @@ func TestNetworkFailureAndLogoutErrorsStillDeleteVM(t *testing.T) {
 			}
 			return client.ExecResult{}, errors.New("logout failed")
 		}
-		if strings.HasPrefix(name, "garm-network-") {
-			return client.ExecResult{Stderr: "tskey-auth-worker-secret"}, errors.New("tskey-auth-worker-secret")
-		}
-		if command == "bootstrap-command" {
-			bootstrapped = true
-		}
 		return client.ExecResult{}, nil
 	}
-	_, err := p.CreateInstance(context.Background(), testParams("failed-network"))
-	if err == nil || strings.Contains(err.Error(), "tskey-auth-worker-secret") {
-		t.Fatal("unsafe network error")
+	if err := p.DeleteInstance(context.Background(), instance.ProviderID); err != nil {
+		t.Fatal(err)
 	}
-	if *mints != 1 || !logout || bootstrapped || len(api.deletes) != 1 {
-		t.Fatal("network failure did not safely delete VM")
+	if !logout || len(api.deletes) != 1 {
+		t.Fatal("logout failure prevented deletion")
 	}
 }
 
@@ -154,7 +120,7 @@ func TestNetworkConfigurationCannotChangeDuringRecovery(t *testing.T) {
 	api := newFake()
 	p, mints := networkProvider(t, api)
 	bp := testParams("configuration")
-	seedNetworkStage(t, p, api, bp, "networking")
+	seedNetworkStage(t, p, api, bp, "allocated")
 	p.cfg.Tailscale.PrivateAliases = []string{"changed.example"}
 	if _, err := p.CreateInstance(context.Background(), bp); err == nil {
 		t.Fatal("network policy changed during recovery")
