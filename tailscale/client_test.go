@@ -5,7 +5,6 @@ package tailscale
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -132,7 +130,7 @@ func TestErrorsNeverIncludeCredentialOrResponse(t *testing.T) {
 	}
 }
 
-func TestValidateAndCommand(t *testing.T) {
+func TestValidateAndConfiguration(t *testing.T) {
 	cfg := testConfig(t)
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
@@ -158,30 +156,21 @@ func TestValidateAndCommand(t *testing.T) {
 		t.Fatal("disabled network requires credentials")
 	}
 	cfg = testConfig(t)
-	command, err := Command(cfg, "tskey-auth-private-worker", "garm-worker")
+	payload, err := Configuration(cfg, "tskey-auth-private-worker", "garm-worker")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, secret := range []string{"oauth-private-secret", cfg.OAuthSecretFile, "tskey-auth-private-worker", cfg.OAuthClientID} {
-		if strings.Contains(command, secret) {
-			t.Fatal("raw credential or controller-only setting appears in guest command")
-		}
-	}
-	parts := regexp.MustCompile(`b64decode\('([A-Za-z0-9+/=]+)'\)`).FindAllStringSubmatch(command, -1)
-	if len(parts) != 2 {
-		t.Fatal("unexpected payload envelope")
-	}
-	payload, err := base64.StdEncoding.DecodeString(parts[1][1])
-	if err != nil {
+	var value map[string]any
+	if err := json.Unmarshal([]byte(payload), &value); err != nil {
 		t.Fatal(err)
+	}
+	if value["auth_key"] != "tskey-auth-private-worker" {
+		t.Fatal("missing ephemeral key")
 	}
 	for _, secret := range []string{"oauth-private-secret", cfg.OAuthSecretFile, cfg.OAuthClientID} {
-		if strings.Contains(string(payload), secret) {
+		if strings.Contains(payload, secret) {
 			t.Fatal("controller-only credential entered guest payload")
 		}
-	}
-	if len(command) > 96*1024 {
-		t.Fatal("network command exceeds exec envelope")
 	}
 }
 

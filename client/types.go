@@ -12,6 +12,7 @@ type Resources struct {
 }
 
 type CreateRequest struct {
+	Env       map[string]string `json:"env,omitempty"`
 	Name      string            `json:"name"`
 	Template  string            `json:"template"`
 	Type      string            `json:"type"`

@@ -7,32 +7,38 @@ import sys
 import time
 
 from image_cache import verify_loaded
+import launcher
+import network
 
-started = time.monotonic()
-started_at = time.time()
-home = Path(os.environ['HOME'])
-state = home / 'garm-image'
-state.mkdir(mode=0o700, exist_ok=True)
-ready = state / 'ready.json'
-ready.unlink(missing_ok=True)
-fs = subprocess.check_output(['findmnt', '-n', '-o', 'FSTYPE', '-T', str(home)], text=True).strip()
-if fs in ('overlay', 'tmpfs'):
-    raise RuntimeError('Docker data must live on the persistent disk')
-tailscale_enabled = os.environ.get('GARM_TAILSCALE_ENABLED', '0') == '1'
-docker_args = ['dockerd', '--host=unix:///var/run/docker.sock', '--data-root=' + str(home / 'docker')]
-if tailscale_enabled:
-    docker_args.extend(['--bip=172.17.0.1/16', '--dns=172.17.0.1'])
-docker = subprocess.Popen(docker_args)
+docker = None
+ready = Path(os.environ['HOME']) / 'garm-image/ready.json'
 
 
 def shutdown(signum, frame):
     ready.unlink(missing_ok=True)
-    docker.terminate()
+    if docker is not None:
+        docker.terminate()
+    raise SystemExit(128 + signum)
 
 
-signal.signal(signal.SIGTERM, shutdown)
-signal.signal(signal.SIGINT, shutdown)
-try:
+def prepare(network_config):
+    global docker
+    started = time.monotonic()
+    started_at = time.time()
+    home = Path(os.environ['HOME'])
+    state = home / 'garm-image'
+    state.mkdir(mode=0o700, exist_ok=True)
+    ready = state / 'ready.json'
+    ready.unlink(missing_ok=True)
+    fs = subprocess.check_output(['findmnt', '-n', '-o', 'FSTYPE', '-T', str(home)], text=True).strip()
+    if fs in ('overlay', 'tmpfs'):
+        raise RuntimeError('Docker data must live on the persistent disk')
+    tailscale_enabled = os.environ.get('GARM_TAILSCALE_ENABLED', '0') == '1'
+    docker_args = ['dockerd', '--host=unix:///var/run/docker.sock', '--data-root=' + str(home / 'docker')]
+    if tailscale_enabled:
+        docker_args.extend(['--bip=172.17.0.1/16', '--dns=172.17.0.1'])
+    docker = subprocess.Popen(docker_args)
+
     deadline = time.monotonic() + 90
     while subprocess.run(['docker', 'info'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
         if docker.poll() is not None or time.monotonic() > deadline:
@@ -61,13 +67,38 @@ try:
                                 'total_bootstrap_seconds': time.monotonic() - started,
                                 'filesystem': fs, 'tailscale_enabled': tailscale_enabled, 'cached_image': image, 'cached_job_image': job_image,
                                 'job_image_load_seconds': time.monotonic() - cache_started}))
-    sys.exit(docker.wait())
-finally:
-    ready.unlink(missing_ok=True)
-    if docker.poll() is None:
-        docker.terminate()
-        try:
-            docker.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            docker.kill()
-            docker.wait()
+    if network_config is not None:
+        network.setup(network_config, Path(network.__file__).read_text())
+
+
+def main():
+    config, network_config = launcher.configuration()
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
+    try:
+        if config is None:
+            prepare(network_config)
+        else:
+            launcher.launch(config, Path(launcher.__file__).read_text(), lambda: prepare(network_config))
+        config = network_config = None
+        return docker.wait()
+    finally:
+        if config is not None:
+            config.clear()
+        if network_config is not None:
+            network_config.clear()
+        ready.unlink(missing_ok=True)
+        if docker is not None and docker.poll() is None:
+            docker.terminate()
+            try:
+                docker.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                docker.kill()
+                docker.wait()
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except Exception:
+        raise SystemExit('worker startup failed; inspect private status or replace worker') from None

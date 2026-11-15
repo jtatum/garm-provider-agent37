@@ -1,6 +1,6 @@
 # garm-provider-agent37
 
-A GARM external provider for fresh Agent37 VM runners running Gitea Actions. GARM handles job demand and runner reconciliation; this provider creates a VM from a pinned workspace template, waits for Docker and the cached job image, launches GARM's runner installation script, and deletes the VM when GARM retires it. Each worker registers an ephemeral runner with capacity one and runs `daemon --once`.
+A GARM external provider for fresh Agent37 VM runners running Gitea Actions. GARM handles job demand and runner reconciliation; this provider creates a VM with its bootstrap configuration and deletes it when GARM retires it. The pinned workspace image prepares Docker and launches GARM's runner installation script inside the guest. Each worker registers an ephemeral runner with capacity one and runs `daemon --once`.
 
 **Experimental: Gitea runners for trusted repositories.** GitHub runners are not implemented yet. See [operations](docs/OPERATIONS.md) for setup and recovery, [acceptance results](docs/RESULTS.md) for tested behavior and limitations, and [the project/test plan](docs/PLAN.md) for the roadmap.
 
@@ -27,7 +27,9 @@ The binary is `bin/garm-provider-agent37`. `make check` runs race-enabled Go tes
 
 Build an Agent37 workspace template from [`images/runner`](images/runner), then pin the published revision in the GARM pool, for example `garm-gitea-runner@1`. Workspace images are private to your Agent37 workspace; that name is not a globally available image. Unpinned names and built-in `agent37-*` images are rejected by the provider.
 
-The recipe contains Docker, Compose, Buildx, a checksum-verified Gitea runner, and an archived Alpine job image. It starts Docker with data under the persistent `/root` disk and writes `/root/garm-image/ready.json` only after its offline container test passes. The provider requires that marker, a working Docker daemon, and the runner executable before bootstrap. No runner identity, repository, or credentials are baked into the image.
+The recipe contains Docker, Compose, Buildx, a checksum-verified Gitea runner, and an archived Alpine job image. It starts Docker with data under the persistent `/root` disk and writes `/root/garm-image/ready.json` only after its offline container test passes. The entrypoint prepares Docker and optional Tailscale networking, then launches the runner using configuration supplied when the VM is created. The provider returns the VM identity without waiting for guest setup. No runner identity, repository, or credentials are baked into the image.
+
+**Upgrade:** rebuild and pin a runner template from this version before enabling the updated provider. Older images do not consume the bootstrap environment. Drain and disable pools during the coordinated provider/image update; existing worker identities must not be reused.
 
 The cache archive is generated locally and excluded from Git. See [image preparation](docs/OPERATIONS.md#image-preparation) for its pinned source and checksum, and [the lab guide](lab/README.md) for the build helper and integration commands. The recipe retains the tested versions; review version pins when preparing each new template revision. Docker job-image preloading does not populate a separate Buildx builder's cache.
 

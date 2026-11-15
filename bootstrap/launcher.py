@@ -1,4 +1,3 @@
-import base64
 import fcntl
 import http.client
 import json
@@ -98,7 +97,24 @@ def resume():
     raise RuntimeError('worker finished or was interrupted; replace it')
 
 
-def launch(config, source):
+def configuration():
+    bootstrap = os.environ.pop('GARM_BOOTSTRAP_CONFIG', None)
+    network = os.environ.pop('GARM_NETWORK_CONFIG', None)
+    if network is not None and bootstrap is None:
+        raise RuntimeError('network configuration requires bootstrap configuration')
+    try:
+        config = json.loads(bootstrap) if bootstrap is not None else None
+        network_config = json.loads(network) if network is not None else None
+        if bootstrap is not None and not isinstance(config, dict):
+            raise ValueError('bootstrap must be an object')
+        if network is not None and not isinstance(network_config, dict):
+            raise ValueError('network must be an object')
+        return config, network_config
+    except (TypeError, ValueError):
+        raise RuntimeError('invalid worker configuration') from None
+
+
+def launch(config, source, prepare=lambda: None):
     os.umask(0o077)
     ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(ROOT, 0o700)
@@ -116,6 +132,7 @@ def launch(config, source):
             raise RuntimeError('worker already attempted; replace it')
         write_private(ROOT / 'launch.json', json.dumps({'name': config['name'], 'boot_id': boot_id(), 'phase': 'claimed'}))
         claimed = True
+        prepare()
         write_private(ROOT / 'bootstrap.json', json.dumps(config))
         write_private(ROOT / 'launcher.py', source)
         with open(ROOT / 'bootstrap.log', 'ab', buffering=0) as log:
@@ -126,6 +143,8 @@ def launch(config, source):
     except Exception:
         if claimed:
             (ROOT / 'bootstrap.json').unlink(missing_ok=True)
+            callback(config, 'failed', 'worker startup failed; replace this worker')
+            state(phase='failed')
         raise
     finally:
         os.close(fd)

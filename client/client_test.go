@@ -47,6 +47,10 @@ func TestLifecycleAndSeparateExecAuthentication(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
 				t.Error(err)
 			}
+			var env map[string]string
+			if err := json.Unmarshal(raw["env"], &env); err != nil || env["GARM_BOOTSTRAP_CONFIG"] != "private-bootstrap-config" {
+				t.Error("creation environment was not serialized")
+			}
 			if string(raw["auto_sleep"]) != "false" {
 				t.Error("auto_sleep false must be explicit")
 			}
@@ -101,7 +105,7 @@ func TestLifecycleAndSeparateExecAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	got, err := cli.Create(ctx, CreateRequest{Name: "test runner", Template: "runner@2", Type: "vm", Region: "us", MountPath: "/root", Resources: Resources{4, 8, 20}, Metadata: map[string]string{"garm-controller-id": "controller"}})
+	got, err := cli.Create(ctx, CreateRequest{Env: map[string]string{"GARM_BOOTSTRAP_CONFIG": "private-bootstrap-config"}, Name: "test runner", Template: "runner@2", Type: "vm", Region: "us", MountPath: "/root", Resources: Resources{4, 8, 20}, Metadata: map[string]string{"garm-controller-id": "controller"}})
 	if err != nil || got.ID != testID || got.Resources.CPU != 4 {
 		t.Fatalf("Create got %#v, %v", got, err)
 	}

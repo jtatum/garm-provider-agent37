@@ -39,7 +39,7 @@ subnet routes or tailnet DNS settings, advertises no routes, disables Tailscale
 SSH, and blocks unsolicited incoming tailnet connections. Existing tailnet
 policy remains the authority for which peers workers can reach.
 
-After the VM and Docker are ready, the provider enrolls a kernel Tailscale
+After the VM and Docker are ready, the image entrypoint enrolls a kernel Tailscale
 client and finds the gateway's IPv4 address by its exact MagicDNS peer name.
 Private aliases and the gateway name resolve to that address through a local
 dnsmasq instance; all other lookups use the VM's original non-loopback
@@ -49,11 +49,7 @@ including subsequently created `br-*` interfaces. This supplies DNS to the
 host, Docker jobs, and Docker-based BuildKit builders. Custom networking or
 DNS overrides need their own validation.
 
-Enrollment completes before GARM bootstrap downloads metadata. The provider
-journals its enrollment attempt before minting a key; recovery verifies the
-existing guest network rather than minting another key. Incomplete enrollment
-causes VM deletion. Already-running workers are never reenrolled, and changing
-the gateway, aliases, or worker tag cannot silently reuse their creation intent.
+Enrollment completes before GARM bootstrap downloads metadata. The provider reserves capacity, mints one ephemeral key, and supplies it in the VM creation environment. A retry adopts the same VM without minting or replaying a key. The entrypoint claims its one-shot identity before preparing Docker and enrolling the network; interrupted setup requires replacement. Failed enrollment reports a bootstrap failure when the controller is reachable, otherwise GARM's pool bootstrap timeout bounds cleanup. Changing the gateway, aliases, or worker tag cannot silently reuse an existing creation intent.
 
 On deletion, the provider attempts a bounded `tailscale logout` and always
 continues VM cleanup even if logout fails. An unreachable VM may remain visible
